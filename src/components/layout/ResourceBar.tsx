@@ -1,4 +1,4 @@
-import { Space, Tag, Typography, theme } from "antd";
+import { Space, Typography, theme } from "antd";
 import { useEffect, useState } from "react";
 import type { SystemResource } from "../../types";
 import type { ThresholdConfig } from "../../styles/tokens";
@@ -10,9 +10,20 @@ import {
   spacing,
   borderRadius,
   getThresholdColor,
+  glassFillLight,
+  glassBlur,
+  semanticColors,
 } from "../../styles/tokens";
 
-export default function ResourceBar() {
+interface ResourceBarProps {
+  /** 是否暗色主题（由 AppLayout 传入） */
+  isDark?: boolean;
+}
+
+/**
+ * 顶部资源条：玻璃质感对齐托盘顶栏；Pill 展示 CPU/MEM/GPU。
+ */
+export default function ResourceBar({ isDark = false }: ResourceBarProps) {
   const { token } = theme.useToken();
   const [resource, setResource] = useState<SystemResource | null>(null);
   const [runningCount, setRunningCount] = useState(0);
@@ -42,6 +53,10 @@ export default function ResourceBar() {
     setResource(payload.system);
   });
 
+  useTauriEvent("service-status-changed", () => {
+    fetchResources();
+  });
+
   if (!resource) return null;
 
   /**
@@ -67,16 +82,18 @@ export default function ResourceBar() {
             display: "inline-flex",
             alignItems: "center",
             justifyContent: "center",
-            height: 32,
+            height: 28,
             maxWidth: 120,
             minWidth: 80,
             padding: `0 ${spacing.md}px`,
             borderRadius: borderRadius.pill,
-            background: token.colorFillSecondary,
+            background: isDark
+              ? token.colorFillSecondary
+              : "rgba(255,255,255,0.72)",
+            border: `1px solid ${token.colorBorderSecondary}`,
             overflow: "hidden",
           }}
         >
-          {/* 填充层 */}
           <div
             style={{
               position: "absolute",
@@ -85,12 +102,11 @@ export default function ResourceBar() {
               bottom: 0,
               width: `${roundedPercent}%`,
               background: color,
-              opacity: 0.15,
+              opacity: 0.18,
               borderRadius: borderRadius.pill,
               transition: "width 0.3s ease",
             }}
           />
-          {/* 文字层 */}
           <Typography.Text
             style={{
               position: "relative",
@@ -118,12 +134,14 @@ export default function ResourceBar() {
   return (
     <div
       style={{
-        height: 32,
+        height: 44,
         display: "flex",
         alignItems: "center",
         padding: `0 ${spacing.xl}px`,
         borderBottom: `1px solid ${token.colorBorderSecondary}`,
-        background: "inherit",
+        background: isDark ? token.colorBgContainer : glassFillLight,
+        backdropFilter: isDark ? undefined : glassBlur,
+        WebkitBackdropFilter: isDark ? undefined : glassBlur,
         gap: spacing.xl,
       }}
     >
@@ -149,9 +167,33 @@ export default function ResourceBar() {
           )}
       </Space>
       <div style={{ flex: 1 }} />
-      <Tag color="green">
+      <div
+        style={{
+          display: "inline-flex",
+          alignItems: "center",
+          gap: spacing.sm,
+          height: 28,
+          padding: `0 ${spacing.md}px`,
+          borderRadius: borderRadius.pill,
+          background: isDark
+            ? token.colorFillSecondary
+            : "rgba(255,255,255,0.72)",
+          border: `1px solid ${token.colorBorderSecondary}`,
+          fontSize: fontSizes.SM.size,
+          color: token.colorTextSecondary,
+        }}
+      >
+        <span
+          style={{
+            width: 8,
+            height: 8,
+            borderRadius: "50%",
+            background: semanticColors.colorSuccess,
+            flexShrink: 0,
+          }}
+        />
         运行中 {runningCount} / {totalCount}
-      </Tag>
+      </div>
     </div>
   );
 }

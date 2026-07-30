@@ -7,7 +7,7 @@ import {
   YAxis,
 } from "recharts";
 import type { ResourceHistoryPoint, SystemResource } from "../../types";
-import { fontSizes, spacing, borderRadius } from "../../styles/tokens";
+import { fontSizes, spacing, borderRadius, semanticColors } from "../../styles/tokens";
 
 /** 图例单项：色块 + 标签 + 当前百分比 */
 export interface LegendItem {
@@ -38,14 +38,14 @@ const BOOTSTRAP_ZERO_SECS = 50;
 const SLOT_MS = 1000;
 
 const COLORS = {
-  user: "#1677ff",
-  system: "#f5222d",
+  user: semanticColors.colorPrimary,
+  system: semanticColors.colorError,
   idle: "#d9d9d9",
-  used: "#1677ff",
+  used: semanticColors.colorPrimary,
   free: "#d9d9d9",
-  gpuDevice: "#1677ff",
-  gpuRenderer: "#f5222d",
-  gpuTiler: "#13c2c2",
+  gpuDevice: semanticColors.colorPrimary,
+  gpuRenderer: semanticColors.colorError,
+  gpuTiler: semanticColors.colorAccent,
 };
 
 /** 单点图表数据结构 */

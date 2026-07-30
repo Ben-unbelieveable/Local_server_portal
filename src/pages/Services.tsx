@@ -2,31 +2,25 @@ import {
   Table,
   Button,
   Space,
-  Modal,
-  Form,
-  Input,
-  InputNumber,
   Select,
   Tooltip,
   App,
   Popconfirm,
-  Typography,
   Empty,
-  Row,
-  Col,
   Dropdown,
   theme,
+  Input,
 } from "antd";
 import {
   ExportOutlined,
   PlusOutlined,
-  PauseCircleOutlined,
   ReloadOutlined,
   EditOutlined,
   DeleteOutlined,
   FileTextOutlined,
-  CaretRightOutlined,
   MoreOutlined,
+  PlayCircleOutlined,
+  PoweroffOutlined,
 } from "@ant-design/icons";
 import { useEffect, useState, useCallback } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
@@ -35,17 +29,21 @@ import { isTauriEnv } from "../api";
 import { useTauriEvent } from "../hooks/useTauriEvent";
 import type {
   ServiceRuntime,
-  ServiceConfig,
-  ServiceStatus,
   StatusChangeEvent,
   BatchResult,
 } from "../types";
-import { semanticColors, fontSizes, spacing } from "../styles/tokens";
-import StatusTag from "../components/common/StatusTag";
+import {
+  semanticColors,
+  spacing,
+  borderRadius,
+} from "../styles/tokens";
 import ServiceNameLink from "../components/common/ServiceNameLink";
+import ServicePowerToggle from "../components/common/ServicePowerToggle";
+import ServiceConfigModal from "../components/common/ServiceConfigModal";
 
-const { TextArea } = Input;
-
+/**
+ * 服务管理页：方案 B — 列表语言向托盘靠拢（状态点 + 胶囊启停 + 白卡片表）。
+ */
 export default function Services() {
   const navigate = useNavigate();
   const { token } = theme.useToken();
@@ -54,8 +52,9 @@ export default function Services() {
   const [services, setServices] = useState<ServiceRuntime[]>([]);
   const [loading, setLoading] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
-  const [editingService, setEditingService] = useState<ServiceRuntime | null>(null);
-  const [form] = Form.useForm();
+  const [editingService, setEditingService] = useState<ServiceRuntime | null>(
+    null
+  );
   const [selectedRowKeys, setSelectedRowKeys] = useState<string[]>([]);
   const [filterGroup, setFilterGroup] = useState<string>("all");
   const [filterStatus, setFilterStatus] = useState<string>("all");
@@ -76,11 +75,9 @@ export default function Services() {
     fetchServices();
   }, [fetchServices]);
 
-  // 高亮跳转
   useEffect(() => {
     const highlight = searchParams.get("highlight");
     if (highlight) {
-      // 简单滚动定位
       setTimeout(() => {
         const row = document.querySelector(`[data-row-key="${highlight}"]`);
         row?.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -92,90 +89,51 @@ export default function Services() {
     fetchServices();
   });
 
-  // 打开服务 URL
   const openServiceUrl = (url: string) => {
     if (isTauriEnv) {
-      import("@tauri-apps/plugin-shell").then(({ open }) => {
-        open(url);
-      }).catch(() => window.open(url, "_blank"));
+      import("@tauri-apps/plugin-shell")
+        .then(({ open }) => {
+          open(url);
+        })
+        .catch(() => window.open(url, "_blank"));
     } else {
       window.open(url, "_blank");
     }
   };
 
-  // 过滤
   const filteredServices = services.filter((s) => {
     if (filterGroup !== "all") {
       const g = s.config.group || "默认";
       if (g !== filterGroup) return false;
     }
     if (filterStatus !== "all") {
-      // 「异常」与仪表盘口径保持一致：命中 error 或 failed（启动失败）
       if (filterStatus === "error") {
         if (s.status !== "error" && s.status !== "failed") return false;
       } else if (s.status !== filterStatus) {
         return false;
       }
     }
-    if (searchText && !s.config.name.toLowerCase().includes(searchText.toLowerCase())) return false;
+    if (
+      searchText &&
+      !s.config.name.toLowerCase().includes(searchText.toLowerCase())
+    )
+      return false;
     return true;
   });
 
-  const groups = ["all", ...new Set(services.map((s) => s.config.group || "默认"))];
+  const groups = [
+    "all",
+    ...new Set(services.map((s) => s.config.group || "默认")),
+  ];
 
   const handleAdd = () => {
     setEditingService(null);
-    form.resetFields();
-    form.setFieldsValue({ stop_timeout: 10 });
     setModalOpen(true);
   };
 
   const handleEdit = (service: ServiceRuntime) => {
     setEditingService(service);
-    form.setFieldsValue({
-      id: service.config.id,
-      name: service.config.name,
-      command: service.config.command,
-      url: service.config.url || "",
-      work_dir: service.config.work_dir || "",
-      group: service.config.group || "",
-      description: service.config.description || "",
-      stop_timeout: service.config.stop_timeout,
-    });
     setModalOpen(true);
-  };
-
-  const handleSave = async () => {
-    try {
-      const values = await form.validateFields();
-      const config: ServiceConfig = {
-        id: editingService ? editingService.config.id : values.id,
-        name: values.name,
-        command: values.command,
-        url: values.url || undefined,
-        work_dir: values.work_dir || undefined,
-        env: {},
-        group: values.group || undefined,
-        description: values.description || undefined,
-        stop_timeout: values.stop_timeout || 10,
-      };
-
-      if (editingService) {
-        await api.updateService(editingService.config.id, config);
-        message.success("服务已更新");
-        if (editingService.status === "running") {
-          message.info("部分修改将在下次启动时生效");
-        }
-      } else {
-        await api.addService(config);
-        message.success("服务已添加");
-      }
-      setModalOpen(false);
-      fetchServices();
-    } catch (e) {
-      if (e && typeof e === "object" && "errorFields" in e) return;
-      message.error(String(e));
-    }
   };
 
   const handleDelete = async (id: string, stopFirst: boolean) => {
@@ -241,33 +199,47 @@ export default function Services() {
     });
   };
 
+  /** 状态点颜色（与托盘列表一致） */
+  const statusDotColor = (status: ServiceRuntime["status"]) => {
+    if (status === "running") return semanticColors.colorSuccess;
+    if (status === "failed" || status === "error")
+      return semanticColors.colorError;
+    if (status === "starting" || status === "stopping")
+      return semanticColors.colorWarning;
+    return token.colorBorder;
+  };
+
   const columns = [
     {
       title: "名称",
       dataIndex: ["config", "name"],
       key: "name",
       render: (name: string, record: ServiceRuntime) => (
-        <ServiceNameLink
-          name={name}
-          serviceId={record.config.id}
-          onClick={(id) => navigate(`/logs/${id}`)}
-        />
-      ),
-    },
-    {
-      title: "状态",
-      dataIndex: "status",
-      key: "status",
-      width: 100,
-      render: (_: unknown, record: ServiceRuntime) => (
-        <StatusTag status={record.status} />
+        <Space size={spacing.sm}>
+          <span
+            style={{
+              width: 8,
+              height: 8,
+              borderRadius: "50%",
+              background: statusDotColor(record.status),
+              display: "inline-block",
+              flexShrink: 0,
+            }}
+          />
+          <ServiceNameLink
+            name={name}
+            serviceId={record.config.id}
+            onClick={(id) => navigate(`/logs/${id}`)}
+          />
+        </Space>
       ),
     },
     {
       title: "分组",
       key: "group",
       width: 100,
-      render: (_: unknown, record: ServiceRuntime) => record.config.group || "默认",
+      render: (_: unknown, record: ServiceRuntime) =>
+        record.config.group || "默认",
     },
     {
       title: "PID",
@@ -283,93 +255,82 @@ export default function Services() {
         record.config.description || "-",
     },
     {
+      title: "启停",
+      key: "power",
+      width: 110,
+      render: (_: unknown, record: ServiceRuntime) => (
+        <ServicePowerToggle
+          status={record.status}
+          onToggle={() => {
+            if (
+              record.status === "stopped" ||
+              record.status === "failed" ||
+              record.status === "error"
+            ) {
+              handleStart(record.config.id);
+            } else if (record.status === "running") {
+              handleStop(record.config.id);
+            }
+          }}
+        />
+      ),
+    },
+    {
       title: "操作",
       key: "action",
-      width: 200,
+      width: 180,
       render: (_: unknown, record: ServiceRuntime) => {
         const isRunning = record.status === "running";
-        const isTransition =
-          record.status === "starting" || record.status === "stopping";
         return (
-          <Space size="small">
-            {isRunning ? (
-              <>
-                {/* 停止 — Danger 红 */}
-                <Tooltip title="停止">
-                  <Button
-                    size="small"
-                    danger
-                    icon={<PauseCircleOutlined />}
-                    onClick={() => handleStop(record.config.id)}
-                  />
-                </Tooltip>
-                {/* 访问 — Default 蓝 */}
-                {record.config.url && (
-                  <Tooltip title={`访问 ${record.config.url}`}>
-                    <Button
-                      size="small"
-                      type="default"
-                      icon={<ExportOutlined />}
-                      style={{ color: semanticColors.colorPrimary }}
-                      onClick={() => openServiceUrl(record.config.url!)}
-                    />
-                  </Tooltip>
-                )}
-                {/* 更多操作 — Dropdown hover 触发 */}
-                <Dropdown
-                  trigger={["hover"]}
-                  menu={{
-                    items: [
-                      {
-                        key: "restart",
-                        label: "重启",
-                        icon: <ReloadOutlined />,
-                      },
-                    ],
-                    onClick: () => handleRestart(record.config.id),
-                  }}
-                >
-                  <Tooltip title="更多操作">
-                    <Button size="small" icon={<MoreOutlined />} />
-                  </Tooltip>
-                </Dropdown>
-              </>
-            ) : isTransition ? (
-              <Button size="small" loading disabled>
-                处理中
-              </Button>
-            ) : (
-              /* 启动 — Primary 蓝 */
-              <Tooltip title="启动">
+          <Space size={2}>
+            <Tooltip title="编辑">
+              <Button
+                size="small"
+                type="text"
+                icon={<EditOutlined />}
+                style={{ color: semanticColors.colorPrimary }}
+                onClick={() => handleEdit(record)}
+              />
+            </Tooltip>
+            {isRunning && record.config.url && (
+              <Tooltip title={`访问 ${record.config.url}`}>
                 <Button
                   size="small"
-                  type="primary"
-                  icon={<CaretRightOutlined />}
-                  onClick={() => handleStart(record.config.id)}
+                  type="text"
+                  icon={<ExportOutlined />}
+                  style={{ color: semanticColors.colorPrimary }}
+                  onClick={() => openServiceUrl(record.config.url!)}
                 />
               </Tooltip>
             )}
-            {/* 日志 — Default 灰 */}
+            {isRunning && (
+              <Dropdown
+                trigger={["hover"]}
+                menu={{
+                  items: [
+                    {
+                      key: "restart",
+                      label: "重启",
+                      icon: <ReloadOutlined />,
+                    },
+                  ],
+                  onClick: () => handleRestart(record.config.id),
+                }}
+              >
+                <Tooltip title="更多">
+                  <Button size="small" type="text" icon={<MoreOutlined />} />
+                </Tooltip>
+              </Dropdown>
+            )}
             <Tooltip title="日志">
               <Button
                 size="small"
-                type="default"
+                type="text"
                 icon={<FileTextOutlined />}
                 style={{ color: token.colorTextSecondary }}
                 onClick={() => navigate(`/logs/${record.config.id}`)}
               />
             </Tooltip>
-            {/* 编辑 — Default 灰 */}
-            <Tooltip title="编辑">
-              <Button
-                size="small"
-                type="default"
-                icon={<EditOutlined />}
-                style={{ color: token.colorTextSecondary }}
-                onClick={() => handleEdit(record)}
-              />
-            </Tooltip>
-            {/* 删除 — Danger 灰红 */}
             <Popconfirm
               title="确定删除此服务？"
               description={
@@ -377,10 +338,17 @@ export default function Services() {
                   ? "该服务正在运行中，是否同时停止？"
                   : undefined
               }
-              onConfirm={() => handleDelete(record.config.id, record.status === "running")}
+              onConfirm={() =>
+                handleDelete(record.config.id, record.status === "running")
+              }
             >
               <Tooltip title="删除">
-                <Button size="small" danger type="text" icon={<DeleteOutlined />} />
+                <Button
+                  size="small"
+                  danger
+                  type="text"
+                  icon={<DeleteOutlined />}
+                />
               </Tooltip>
             </Popconfirm>
           </Space>
@@ -391,8 +359,6 @@ export default function Services() {
 
   return (
     <div>
-      {/* 工具栏 — 双层分层 */}
-      {/* 第一层：筛选行 */}
       <div
         style={{
           marginBottom: spacing.md,
@@ -405,7 +371,10 @@ export default function Services() {
           value={filterGroup}
           onChange={setFilterGroup}
           style={{ width: 120 }}
-          options={groups.map((g) => ({ label: g === "all" ? "全部分组" : g, value: g }))}
+          options={groups.map((g) => ({
+            label: g === "all" ? "全部分组" : g,
+            value: g,
+          }))}
         />
         <Select
           value={filterStatus}
@@ -427,7 +396,6 @@ export default function Services() {
         />
       </div>
 
-      {/* 第二层：操作行 */}
       <div
         style={{
           marginBottom: spacing.md,
@@ -438,11 +406,15 @@ export default function Services() {
         <Space>
           {selectedRowKeys.length > 0 && (
             <>
-              <Button onClick={handleBatchStart}>
-                <CaretRightOutlined /> 批量启动 ({selectedRowKeys.length})
+              <Button icon={<PlayCircleOutlined />} onClick={handleBatchStart}>
+                批量启动 ({selectedRowKeys.length})
               </Button>
-              <Button onClick={handleBatchStop}>
-                <PauseCircleOutlined /> 批量停止 ({selectedRowKeys.length})
+              <Button
+                danger
+                icon={<PoweroffOutlined />}
+                onClick={handleBatchStop}
+              >
+                批量停止 ({selectedRowKeys.length})
               </Button>
             </>
           )}
@@ -452,107 +424,53 @@ export default function Services() {
         </Space>
       </div>
 
-      {/* 表格 */}
-      <Table
-        dataSource={filteredServices}
-        columns={columns}
-        rowKey={(r) => r.config.id}
-        loading={loading}
-        rowSelection={{
-          selectedRowKeys,
-          onChange: (keys) => setSelectedRowKeys(keys as string[]),
-        }}
-        pagination={false}
-        size="middle"
-        locale={{
-          emptyText: (
-            <Empty description="还没有服务">
-              <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>
-                添加第一个服务
-              </Button>
-            </Empty>
-          ),
-        }}
-        rowClassName={(record) => {
-          if (record.status === "error" || record.status === "failed")
-            return "row-error";
-          return "";
-        }}
-        onRow={(record) => ({
-          "data-row-key": record.config.id,
-        } as React.HTMLAttributes<HTMLElement>)}
-      />
+      <div className="surface-card" style={{ borderRadius: borderRadius.card }}>
+        <Table
+          dataSource={filteredServices}
+          columns={columns}
+          rowKey={(r) => r.config.id}
+          loading={loading}
+          rowSelection={{
+            selectedRowKeys,
+            onChange: (keys) => setSelectedRowKeys(keys as string[]),
+          }}
+          pagination={false}
+          size="middle"
+          locale={{
+            emptyText: (
+              <Empty description="还没有服务">
+                <Button
+                  type="primary"
+                  icon={<PlusOutlined />}
+                  onClick={handleAdd}
+                >
+                  添加第一个服务
+                </Button>
+              </Empty>
+            ),
+          }}
+          rowClassName={(record) => {
+            if (record.status === "error" || record.status === "failed")
+              return "row-error";
+            return "";
+          }}
+          onRow={(record) =>
+            ({
+              "data-row-key": record.config.id,
+            }) as React.HTMLAttributes<HTMLElement>
+          }
+        />
+      </div>
 
-      {/* 添加/编辑弹窗 */}
-      <Modal
-        title={editingService ? "编辑服务" : "添加服务"}
+      <ServiceConfigModal
         open={modalOpen}
-        onOk={handleSave}
+        editingService={editingService}
         onCancel={() => setModalOpen(false)}
-        width={600}
-        okText="保存"
-        cancelText="取消"
-      >
-        <Form form={form} layout="vertical">
-          {!editingService && (
-            <Form.Item
-              name="id"
-              label="服务 ID"
-              rules={[
-                { required: true, message: "请输入服务 ID" },
-                {
-                  pattern: /^[a-zA-Z0-9_-]+$/,
-                  message: "仅支持字母、数字、下划线和连字符",
-                },
-              ]}
-            >
-              <Input placeholder="如：antibody_annotation" />
-            </Form.Item>
-          )}
-          <Form.Item
-            name="name"
-            label="服务名称"
-            rules={[{ required: true, message: "请输入服务名称" }]}
-          >
-            <Input placeholder="如：Antibody Annotation" />
-          </Form.Item>
-          <Form.Item
-            name="command"
-            label="启动命令"
-            rules={[{ required: true, message: "请输入启动命令" }]}
-          >
-            <TextArea
-              rows={2}
-              placeholder="如：bash /path/to/deploy.sh"
-            />
-          </Form.Item>
-          <Form.Item name="work_dir" label="工作目录">
-            <Input placeholder="默认为命令所在目录" />
-          </Form.Item>
-          <Form.Item
-            name="url"
-            label="访问地址"
-            tooltip="服务运行后可访问的 URL，如 http://localhost:3000。设置后将在仪表盘和服务管理中显示「访问」按钮"
-          >
-            <Input placeholder="如：http://localhost:3000" />
-          </Form.Item>
-          <Row gutter={16}>
-            <Col span={12}>
-              <Form.Item name="group" label="分组">
-                <Input placeholder="如：Web服务" />
-              </Form.Item>
-            </Col>
-            <Col span={12}>
-              <Form.Item name="stop_timeout" label="停止超时（秒）">
-                <InputNumber min={1} max={60} style={{ width: "100%" }} />
-              </Form.Item>
-            </Col>
-          </Row>
-          <Form.Item name="description" label="描述">
-            <TextArea rows={2} placeholder="服务描述（可选）" />
-          </Form.Item>
-        </Form>
-      </Modal>
+        onSaved={() => {
+          setModalOpen(false);
+          fetchServices();
+        }}
+      />
     </div>
   );
 }

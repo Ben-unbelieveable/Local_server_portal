@@ -13,11 +13,13 @@ export interface SemanticColors {
 }
 
 export const semanticColors: SemanticColors = {
+  /** 对齐托盘 / 系统蓝 */
   colorPrimary: "#1677ff",
   colorSuccess: "#10b981",
   colorWarning: "#f59e0b",
   colorError: "#ef4444",
-  colorAccent: "#a855f7",
+  /** 次要点缀（GPU Tiler 等），克制使用 */
+  colorAccent: "#13c2c2",
 };
 
 // ============================================================
@@ -38,15 +40,30 @@ export interface NeutralColors {
 
 export const neutralColors: NeutralColors = {
   colorBorder: "#d9d9d9",
-  colorBorderSecondary: "#f0f0f0",
+  colorBorderSecondary: "#e8eef5",
   colorText: "rgba(0, 0, 0, 0.88)",
   colorTextSecondary: "#8c8c8c",
   colorTextTertiary: "#bfbfbf",
   colorBgContainer: "#ffffff",
-  colorBgLayout: "#f5f5f5",
+  /** 雾蓝底，向托盘弹层氛围靠拢 */
+  colorBgLayout: "#eef5fc",
   colorBgDark: "#141414",
-  colorSiderDark: "#303030",
+  colorSiderDark: "#1c2430",
 };
+
+/** 与托盘一致的系统字体栈 */
+export const fontFamily =
+  '-apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", "Helvetica Neue", sans-serif';
+
+/**
+ * 主内容区 / 托盘共用的浅色氛围渐变（方案 B：主窗向托盘靠拢）
+ */
+export const surfaceGradientLight =
+  "linear-gradient(180deg, #e6f4ff 0%, #f0f7ff 45%, #f7fbff 100%)";
+
+/** 玻璃顶栏/侧栏半透明底 */
+export const glassFillLight = "rgba(255, 255, 255, 0.62)";
+export const glassBlur = "blur(12px)";
 
 // ============================================================
 // Font Sizes — 6 阶字号体系
@@ -190,6 +207,8 @@ export const antdThemeToken: ThemeConfig["token"] = {
   colorSuccess: semanticColors.colorSuccess,
   colorWarning: semanticColors.colorWarning,
   colorError: semanticColors.colorError,
+  colorBgLayout: neutralColors.colorBgLayout,
+  fontFamily,
   borderRadius: borderRadius.input,
   borderRadiusLG: borderRadius.card,
 };
@@ -210,6 +229,9 @@ export const cssVariables: Record<string, string> = {
   "--color-text-tertiary": neutralColors.colorTextTertiary,
   "--color-bg-container": neutralColors.colorBgContainer,
   "--color-bg-layout": neutralColors.colorBgLayout,
+  "--font-family": fontFamily,
+  "--surface-gradient-light": surfaceGradientLight,
+  "--glass-fill-light": glassFillLight,
   "--shadow-sm": shadows.sm,
   "--shadow-md": shadows.md,
   "--shadow-lg": shadows.lg,

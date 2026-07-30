@@ -33,6 +33,7 @@ import {
   semanticColors,
   fontSizes,
   getThresholdColor,
+  borderRadius,
 } from "../styles/tokens";
 import StatusTag from "../components/common/StatusTag";
 import ServiceNameLink from "../components/common/ServiceNameLink";
@@ -258,7 +259,16 @@ export default function Dashboard() {
           </div>
         </Col>
         <Col span={6} style={{ display: "flex" }}>
-          <Card style={{ flex: 1, height: "100%" }}>
+          <Card
+            style={{
+              flex: 1,
+              height: "100%",
+              borderRadius: borderRadius.card,
+              border: "1px solid rgba(0,0,0,0.06)",
+              boxShadow: "none",
+            }}
+            styles={{ body: { padding: 16 } }}
+          >
             <Statistic
               title="运行中"
               value={runningCount}
@@ -288,7 +298,14 @@ export default function Dashboard() {
 
       <Row gutter={[16, 16]} style={{ marginTop: 16 }}>
         <Col span={16}>
-          <Card title="服务列表">
+          <Card
+            title="服务列表"
+            style={{
+              borderRadius: borderRadius.card,
+              border: "1px solid rgba(0,0,0,0.06)",
+              boxShadow: "none",
+            }}
+          >
             <Table
               dataSource={services}
               columns={columns}
@@ -309,7 +326,14 @@ export default function Dashboard() {
           </Card>
         </Col>
         <Col span={8}>
-          <Card title="内存占用 Top 5">
+          <Card
+            title="内存占用 Top 5"
+            style={{
+              borderRadius: borderRadius.card,
+              border: "1px solid rgba(0,0,0,0.06)",
+              boxShadow: "none",
+            }}
+          >
             {top5.length === 0 ? (
               <Empty
                 description="暂无运行中的服务"

@@ -10,7 +10,14 @@ import {
 import { useNavigate, useLocation } from "react-router-dom";
 import type { ReactNode } from "react";
 import ResourceBar from "./ResourceBar";
-import { fontSizes, spacing } from "../../styles/tokens";
+import {
+  fontSizes,
+  spacing,
+  surfaceGradientLight,
+  glassFillLight,
+  glassBlur,
+  fontFamily,
+} from "../../styles/tokens";
 
 const { Sider, Content } = Layout;
 
@@ -27,29 +34,37 @@ const menuItems = [
   { key: "/settings", icon: <SettingOutlined />, label: "配置" },
 ];
 
+/**
+ * 主窗口壳层：方案 B — 雾蓝氛围 + 玻璃侧栏/顶栏，向托盘弹层视觉靠拢。
+ */
 export default function AppLayout({ children, isDark, onToggleTheme }: Props) {
   const navigate = useNavigate();
   const location = useLocation();
   const { token } = theme.useToken();
 
+  const contentBg = isDark ? token.colorBgLayout : surfaceGradientLight;
+  const siderBg = isDark ? undefined : glassFillLight;
+
   return (
-    <Layout style={{ height: "100vh" }}>
+    <Layout style={{ height: "100vh", fontFamily }}>
       <Sider
         width={200}
         theme={isDark ? "dark" : "light"}
         style={{
           borderRight: `1px solid ${token.colorBorderSecondary}`,
+          background: siderBg,
+          backdropFilter: isDark ? undefined : glassBlur,
+          WebkitBackdropFilter: isDark ? undefined : glassBlur,
         }}
       >
-        {/* Flex 列布局：Logo + Menu(flex:1) + Footer */}
         <div
           style={{
             display: "flex",
             flexDirection: "column",
             height: "100%",
+            background: "transparent",
           }}
         >
-          {/* Logo */}
           <div
             style={{
               height: 48,
@@ -60,21 +75,24 @@ export default function AppLayout({ children, isDark, onToggleTheme }: Props) {
               flexShrink: 0,
             }}
           >
-            <Typography.Title level={5} style={{ margin: 0 }}>
-              ⚡ ServicePilot
+            <Typography.Title level={5} style={{ margin: 0, fontFamily }}>
+              ServicePilot
             </Typography.Title>
           </div>
 
-          {/* Menu — flex:1 撑满中间空间 */}
           <Menu
             mode="inline"
             selectedKeys={[location.pathname]}
             items={menuItems}
             onClick={({ key }) => navigate(key)}
-            style={{ borderRight: 0, marginTop: spacing.sm, flex: 1 }}
+            style={{
+              borderRight: 0,
+              marginTop: spacing.sm,
+              flex: 1,
+              background: "transparent",
+            }}
           />
 
-          {/* Footer — Switch 左 + 版本号 右 */}
           <div
             style={{
               height: 48,
@@ -102,13 +120,13 @@ export default function AppLayout({ children, isDark, onToggleTheme }: Props) {
           </div>
         </div>
       </Sider>
-      <Layout>
-        <ResourceBar />
+      <Layout style={{ background: "transparent" }}>
+        <ResourceBar isDark={isDark} />
         <Content
           style={{
             padding: spacing.xl,
             overflow: "auto",
-            background: token.colorBgLayout,
+            background: contentBg,
           }}
         >
           {children}
