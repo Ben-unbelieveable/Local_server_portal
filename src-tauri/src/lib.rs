@@ -209,8 +209,8 @@ pub fn run() {
                 });
             }
 
-            // 主窗口关闭：默认隐藏到托盘（不退出）；偏好开启时彻底退出（含托盘）。
-            // 注意：隐藏中的 tray-popup 仍算存活窗口，仅 allow close 主窗往往不会结束进程。
+            // 主窗口关闭：默认隐藏主窗 + 从程序坞移除（Accessory），托盘继续跑；
+            // 偏好开启时彻底退出。社区方案：set_activation_policy(Accessory/Regular)。
             if let Some(main) = app.get_webview_window("main") {
                 let main_for_hide = main.clone();
                 let app_for_quit = app_handle.clone();
@@ -219,6 +219,12 @@ pub fn run() {
                         if !QUIT_WHEN_CLOSE_MAIN.load(Ordering::SeqCst) {
                             api.prevent_close();
                             let _ = main_for_hide.hide();
+                            // 主窗隐藏后切到 Accessory：程序坞标签消失，菜单栏托盘保留
+                            #[cfg(target_os = "macos")]
+                            {
+                                let _ = app_for_quit
+                                    .set_activation_policy(tauri::ActivationPolicy::Accessory);
+                            }
                         } else {
                             api.prevent_close();
                             let handle = app_for_quit.clone();

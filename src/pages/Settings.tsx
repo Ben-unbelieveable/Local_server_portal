@@ -134,7 +134,7 @@ export default function Settings() {
       message.success(
         checked
           ? "已开启：关闭主窗口将退出托盘"
-          : "已关闭：关闭主窗口仅隐藏，托盘继续运行"
+          : "已关闭：关闭主窗口会离开程序坞，托盘继续运行"
       );
     } catch (e) {
       setQuitWhenCloseMain(!checked);
@@ -208,7 +208,7 @@ export default function Settings() {
     <div>
       <Card title="应用行为" style={{ marginBottom: spacing.md }} loading={prefsLoading}>
         <Typography.Paragraph type="secondary" style={{ marginBottom: spacing.md }}>
-          本工具以托盘为主：关闭主窗口默认不退出托盘；在托盘内点「退出应用」才会彻底结束。
+          本工具以托盘为主：关闭主窗口默认离开程序坞且不退出托盘；在托盘内点「退出应用」才会彻底结束。
         </Typography.Paragraph>
 
         <div
@@ -224,7 +224,7 @@ export default function Settings() {
             <Typography.Text strong>关闭主窗口时同步退出托盘</Typography.Text>
             <br />
             <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-              关闭 Dock 中激活的应用窗口时，是否一并退出托盘与后台进程。默认关闭（仅隐藏主窗）。
+              关闭 Dock 中激活的应用窗口时，是否一并退出托盘与后台进程。默认关闭（主窗隐藏并移出程序坞，托盘继续运行）。
             </Typography.Text>
           </div>
           <Switch

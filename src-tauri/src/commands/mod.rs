@@ -292,6 +292,7 @@ pub async fn hide_tray_popup(app: tauri::AppHandle) -> Result<(), String> {
 ///
 /// 从托盘 Webview 直接调用 `Window.getByLabel("main").show()` 常因 ACL
 ///（权限仅作用于当前窗口）失败；改为 Rust 侧操作可可靠打开主窗口。
+/// macOS：先切回 Regular，让程序坞重新出现该应用标签。
 #[tauri::command]
 pub async fn show_main_window(app: tauri::AppHandle) -> Result<(), String> {
     // 先藏托盘，避免失焦竞态把用户注意力拉回弹窗
@@ -306,6 +307,13 @@ pub async fn show_main_window(app: tauri::AppHandle) -> Result<(), String> {
             Ordering::SeqCst,
         );
     }
+
+    // 恢复程序坞可见（关主窗时曾切到 Accessory）
+    #[cfg(target_os = "macos")]
+    {
+        let _ = app.set_activation_policy(tauri::ActivationPolicy::Regular);
+    }
+
     if let Some(main) = app.get_webview_window("main") {
         let _ = main.show();
         let _ = main.unminimize();
