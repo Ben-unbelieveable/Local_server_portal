@@ -1,0 +1,105 @@
+%% ServicePilot UI 优化 — 类图
+
+classDiagram
+    class DesignTokens {
+        <<module src/styles/tokens.ts>>
+        +semanticColors: SemanticColors
+        +fontSizes: FontSizeScale
+        +spacing: SpacingScale
+        +borderRadius: RadiusScale
+        +shadows: ShadowScale
+        +antdThemeToken: ThemeConfig
+        +cssVariables: Record~string,string~
+        +getThresholdColor(percent: number, thresholds?: ThresholdConfig) string
+    }
+
+    class SemanticColors {
+        +colorPrimary: string = '#1677ff'
+        +colorSuccess: string = '#10b981'
+        +colorWarning: string = '#f59e0b'
+        +colorError: string = '#ef4444'
+        +colorAccent: string = '#a855f7'
+    }
+
+    class FontSizeScale {
+        +XS: FontSize = {size: 11, weight: 400}
+        +SM: FontSize = {size: 12, weight: 400}
+        +Base: FontSize = {size: 14, weight: 400}
+        +MD: FontSize = {size: 16, weight: 500}
+        +LG: FontSize = {size: 20, weight: 600}
+        +XL: FontSize = {size: 28, weight: 700}
+    }
+
+    class ThemeContextValue {
+        +isDark: boolean
+        +toggleTheme: () => void
+    }
+
+    class ResourcePillProps {
+        +label: string
+        +percent: number
+        +thresholds?: ThresholdConfig
+        +extra?: string
+    }
+
+    class ServiceNameLinkProps {
+        +name: string
+        +serviceId: string
+        +onClick: (serviceId: string) => void
+    }
+
+    class StatusTagProps {
+        +status: ServiceStatus
+        +pulse?: boolean
+        +size?: 'small' | 'default'
+    }
+
+    class ResourceBar {
+        -resource: SystemResource
+        -runningCount: number
+        -totalCount: number
+        +fetchResources() Promise~void~
+        +renderPill(label, percent, thresholds) JSX
+    }
+
+    class AppLayout {
+        +isDark: boolean
+        +onToggleTheme: () => void
+        -renderSiderFooter() JSX
+    }
+
+    class Services {
+        -services: ServiceRuntime[]
+        -filteredServices: ServiceRuntime[]
+        -columns: ColumnDef[]
+        -renderToolbar() JSX
+        -renderActionColumn(record) JSX
+        -renderMoreDropdown(record) JSX
+    }
+
+    class Dashboard {
+        -services: ServiceRuntime[]
+        -resource: SystemResource
+        -columns: ColumnDef[]
+        -renderStatCards() JSX
+    }
+
+    class Settings {
+        -isDark: boolean
+        -editorView: EditorView
+        -getEditorExtensions() Extension[]
+        +loadConfig() Promise~void~
+        +handleSave() Promise~void~
+    }
+
+    DesignTokens --> SemanticColors
+    DesignTokens --> FontSizeScale
+    DesignTokens ..> ResourceBar : getThresholdColor()
+    ResourcePillProps ..> ResourceBar : props
+    ServiceNameLinkProps ..> Services : props
+    ServiceNameLinkProps ..> Dashboard : props
+    StatusTagProps ..> Services : props
+    StatusTagProps ..> Dashboard : props
+    StatusTagProps ..> TrayPopup : props
+    ThemeContextValue ..> Settings : isDark
+    ThemeContextValue ..> AppLayout : isDark

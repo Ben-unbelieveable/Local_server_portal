@@ -1,0 +1,100 @@
+%% ServicePilot UI 优化 — 时序图
+
+%% 4.1 应用初始化 + Token 注册流程
+sequenceDiagram
+    participant App
+    participant ThemeContext
+    participant ConfigProvider
+    participant AppLayout
+    participant ResourceBar
+
+    App->>App: 读取 localStorage("theme") 初始化 isDark
+    App->>App: useEffect 持久化 theme 到 localStorage
+    App->>ThemeContext: 创建 ThemeProvider(isDark, toggleTheme)
+    App->>ConfigProvider: theme={algorithm, token: antdThemeToken}
+    Note over ConfigProvider: algorithm: isDark ? darkAlgorithm : defaultAlgorithm
+    Note over ConfigProvider: token: colorPrimary, colorSuccess, colorWarning, colorError, borderRadius...
+    ConfigProvider->>AppLayout: 渲染布局 (isDark, onToggleTheme)
+    AppLayout->>AppLayout: renderSiderFooter(): Flex(Switch左 + 版本号右)
+    AppLayout->>ResourceBar: 渲染资源条
+
+%% 4.2 ResourceBar Pill 渲染流程
+sequenceDiagram
+    participant ResourceBar
+    participant API
+    participant TauriEvent
+    participant Pill
+
+    ResourceBar->>API: Promise.all([getSystemResources(), getServices()])
+    API-->>ResourceBar: { SystemResource, ServiceRuntime[] }
+    ResourceBar->>ResourceBar: 计算 runningCount / totalCount
+    ResourceBar->>ResourceBar: 移除 CircleProgress，构建 Pill 数组
+
+    loop 每个 Pill (CPU / MEM / GPU)
+        ResourceBar->>Pill: <ResourcePill label="CPU" percent=45 />
+        Pill->>Pill: getThresholdColor(45, {warning:50, danger:80})
+        Pill-->>Pill: 返回 semanticColors.colorSuccess ("#10b981")
+        Pill->>Pill: 渲染: 圆角容器(32px) + 半透明填充(width=45%) + 文字("CPU 45%")
+        Pill-->>ResourceBar: Pill JSX
+    end
+
+    ResourceBar->>ResourceBar: 右侧整合 Tag("运行中 N / M")
+    ResourceBar-->>AppLayout: 渲染完成 (高度 32px)
+
+    TauriEvent-->>ResourceBar: "resource-update" 事件
+    ResourceBar->>ResourceBar: 更新 resource state → Pill 自动重渲染
+
+%% 4.3 Services 操作列渲染流程（含 Dropdown 重启）
+sequenceDiagram
+    participant User
+    participant Services
+    participant ActionColumn
+    participant Dropdown
+    participant API
+
+    Services->>ActionColumn: 渲染操作列 (width: 200px)
+    ActionColumn->>ActionColumn: 启动按钮: type=primary (Primary蓝)
+    ActionColumn->>ActionColumn: 停止按钮: danger (Danger红)
+    ActionColumn->>ActionColumn: 访问按钮: type=default (Default蓝)
+    ActionColumn->>ActionColumn: 日志按钮: type=default (Default灰)
+    ActionColumn->>ActionColumn: 编辑按钮: type=default (Default灰)
+    ActionColumn->>ActionColumn: 删除按钮: danger type=text (Danger灰红)
+    ActionColumn->>Dropdown: "更多" 按钮 (icon: MoreOutlined, trigger: hover)
+    Note over Dropdown: menu.items = [{ key:"restart", label:"重启", icon:ReloadOutlined }]
+
+    User->>Dropdown: hover "更多" 按钮
+    Dropdown->>Dropdown: 展开菜单 (显示"重启"选项)
+    User->>Dropdown: 点击 "重启"
+    Dropdown->>API: api.restartService(record.config.id)
+    API-->>Dropdown: 操作完成
+    Dropdown->>Services: useTauriEvent 触发 fetchServices() 刷新
+
+%% 4.4 Settings 编辑器主题切换流程
+sequenceDiagram
+    participant User
+    participant Settings
+    participant ThemeContext
+    participant EditorView
+    participant API
+
+    Settings->>ThemeContext: useTheme() 获取 isDark
+    ThemeContext-->>Settings: isDark = true
+
+    Settings->>Settings: getEditorExtensions()
+    alt isDark === true
+        Settings->>Settings: extensions = [basicSetup, yaml(), oneDark]
+    else isDark === false
+        Settings->>Settings: extensions = [basicSetup, yaml()]
+    end
+
+    Settings->>API: api.getConfigRaw()
+    API-->>Settings: YAML 配置文本
+    Settings->>EditorView: new EditorView({ doc, extensions, parent })
+    Note over EditorView: 亮色: 默认浅色主题 + border: token.colorBorderSecondary
+    Note over EditorView: 暗色: oneDark 主题 + border: token.colorBorder
+
+    User->>ThemeContext: 切换主题 (toggleTheme)
+    ThemeContext-->>Settings: isDark 变化 → useEffect 触发
+    Settings->>EditorView: view.destroy() 销毁旧实例
+    Settings->>Settings: getEditorExtensions() 重新计算
+    Settings->>EditorView: new EditorView({ doc: 旧内容, extensions: 新, parent })
