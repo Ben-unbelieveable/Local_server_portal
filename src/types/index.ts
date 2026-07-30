@@ -99,3 +99,11 @@ export interface ResourceUpdateEvent {
   /** 启动后采样的资源历史（环形缓冲） */
   history: ResourceHistoryPoint[];
 }
+
+/** 应用行为偏好（与服务 YAML 分离） */
+export interface AppPreferences {
+  /** 关闭主窗口时是否同步退出托盘 */
+  quit_when_close_main: boolean;
+  /** 开机启动偏好镜像 */
+  launch_at_login: boolean;
+}

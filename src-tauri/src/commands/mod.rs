@@ -3,6 +3,7 @@ use crate::models::{
     SystemResource,
 };
 use crate::services::config_manager;
+use crate::services::preferences::{self, AppPreferences};
 use crate::services::resource_monitor::ResourceMonitor;
 use crate::services::service_manager::AppState;
 use crate::TRAY_IGNORE_SHOW_UNTIL_MS;
@@ -314,3 +315,37 @@ pub async fn show_main_window(app: tauri::AppHandle) -> Result<(), String> {
         Err("主窗口未创建".to_string())
     }
 }
+
+// ==================== 应用偏好 / 退出 ====================
+
+/// 读取应用偏好（关主窗是否退托盘、开机启动镜像）
+#[tauri::command]
+pub async fn get_app_preferences() -> Result<AppPreferences, String> {
+    Ok(preferences::load_preferences())
+}
+
+/// 设置：关闭 Dock 主窗口时是否同步退出托盘/进程
+#[tauri::command]
+pub async fn set_quit_when_close_main(enabled: bool) -> Result<AppPreferences, String> {
+    preferences::set_quit_when_close_main(enabled)
+}
+
+/// 写入开机启动偏好镜像（OS 登录项由前端 autostart 插件实际开关）
+#[tauri::command]
+pub async fn set_launch_at_login_pref(enabled: bool) -> Result<AppPreferences, String> {
+    preferences::set_launch_at_login_pref(enabled)
+}
+
+/// 彻底退出应用：先尝试停止全部托管服务，再结束进程（含托盘）。
+///
+/// 输入：无；输出：Ok 后进程即将退出。
+#[tauri::command]
+pub async fn quit_app(app: tauri::AppHandle, state: State<'_, AppState>) -> Result<(), String> {
+    {
+        let mut manager = state.manager.lock().await;
+        let _ = manager.shutdown_all().await;
+    }
+    app.exit(0);
+    Ok(())
+}
+

@@ -2,6 +2,8 @@ pub mod commands;
 pub mod models;
 pub mod services;
 
+use services::local_api;
+use services::preferences::{self, QUIT_WHEN_CLOSE_MAIN};
 use services::resource_monitor::ResourceMonitor;
 use services::service_manager::AppState;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -10,6 +12,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::Emitter;
 use tauri::Listener;
 use tauri::Manager;
+use tauri_plugin_autostart::MacosLauncher;
 
 /// 托盘弹窗因失焦隐藏后，短暂忽略随后的托盘点击，避免「失焦隐藏 → 托盘点击又立刻显示」竞态。
 /// 值为 Unix 毫秒时间戳：在此时间之前的 toggle 若本意是「显示」，将被跳过。
@@ -30,8 +33,16 @@ pub fn run() {
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_process::init())
+        // 开机启动：社区方案 tauri-plugin-autostart（macOS LaunchAgent）
+        .plugin(tauri_plugin_autostart::init(
+            MacosLauncher::LaunchAgent,
+            None,
+        ))
         .setup(|app| {
             let app_handle = app.handle().clone();
+
+            // 加载托盘行为偏好（关主窗是否退托盘等）
+            let _ = preferences::load_preferences();
 
             // 初始化应用状态
             let state = AppState::new(app_handle.clone())
@@ -147,6 +158,9 @@ pub fn run() {
                 }
             });
 
+            // 本机 HTTP 桥：浏览器 Vite 预览与主窗/托盘共用同一 AppState
+            local_api::spawn(Arc::clone(&manager));
+
             // 管理 AppState
             app.manage(state);
 
@@ -159,6 +173,8 @@ pub fn run() {
             .title("服务快速管理")
             .inner_size(380.0, 720.0)
             .decorations(false)
+            .transparent(true)
+            .shadow(false)
             .always_on_top(true)
             .skip_taskbar(true)
             .resizable(false)
@@ -193,6 +209,31 @@ pub fn run() {
                 });
             }
 
+            // 主窗口关闭：默认隐藏到托盘（不退出）；偏好开启时彻底退出（含托盘）。
+            // 注意：隐藏中的 tray-popup 仍算存活窗口，仅 allow close 主窗往往不会结束进程。
+            if let Some(main) = app.get_webview_window("main") {
+                let main_for_hide = main.clone();
+                let app_for_quit = app_handle.clone();
+                main.on_window_event(move |event| {
+                    if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                        if !QUIT_WHEN_CLOSE_MAIN.load(Ordering::SeqCst) {
+                            api.prevent_close();
+                            let _ = main_for_hide.hide();
+                        } else {
+                            api.prevent_close();
+                            let handle = app_for_quit.clone();
+                            tauri::async_runtime::spawn(async move {
+                                if let Some(state) = handle.try_state::<AppState>() {
+                                    let mut mgr = state.manager.lock().await;
+                                    let _ = mgr.shutdown_all().await;
+                                }
+                                handle.exit(0);
+                            });
+                        }
+                    }
+                });
+            }
+
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -221,6 +262,10 @@ pub fn run() {
             commands::toggle_tray_popup,
             commands::hide_tray_popup,
             commands::show_main_window,
+            commands::get_app_preferences,
+            commands::set_quit_when_close_main,
+            commands::set_launch_at_login_pref,
+            commands::quit_app,
         ])
         .run(tauri::generate_context!())
         .expect("启动应用失败");

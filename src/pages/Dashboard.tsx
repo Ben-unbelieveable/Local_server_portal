@@ -12,6 +12,7 @@ import {
   Tooltip,
   Spin,
   Divider,
+  Grid,
 } from "antd";
 import {
   PlusOutlined,
@@ -34,18 +35,24 @@ import {
   fontSizes,
   getThresholdColor,
   borderRadius,
+  spacing,
 } from "../styles/tokens";
 import StatusTag from "../components/common/StatusTag";
 import ServiceNameLink from "../components/common/ServiceNameLink";
 import ResourceHistoryChart from "../components/common/ResourceHistoryChart";
 
+const { useBreakpoint } = Grid;
+
 export default function Dashboard() {
   const navigate = useNavigate();
+  const screens = useBreakpoint();
   const [services, setServices] = useState<ServiceRuntime[]>([]);
   const [resource, setResource] = useState<SystemResource | null>(null);
   const [history, setHistory] = useState<ResourceHistoryPoint[]>([]);
   const [svcResources, setSvcResources] = useState<ServiceResource[]>([]);
   const [loading, setLoading] = useState(true);
+
+  const chartHeight = screens.md ? 110 : 88;
 
   const fetchData = useCallback(async () => {
     try {
@@ -68,6 +75,13 @@ export default function Dashboard() {
 
   useEffect(() => {
     fetchData();
+  }, [fetchData]);
+
+  // 浏览器预览无 Tauri 事件，轮询本机 HTTP 桥以与主窗/托盘同步
+  useEffect(() => {
+    if (isTauriEnv) return;
+    const timer = setInterval(fetchData, 2000);
+    return () => clearInterval(timer);
   }, [fetchData]);
 
   useTauriEvent<ResourceUpdateEvent>("resource-update", (payload) => {
@@ -225,44 +239,45 @@ export default function Dashboard() {
   }
 
   return (
-    <div>
-      {/* 资源历史曲线：CPU / 内存 / GPU + 服务计数 */}
-      <Row gutter={[16, 16]} style={{ display: "flex", alignItems: "stretch" }}>
-        <Col span={6} style={{ display: "flex" }}>
-          <div style={{ flex: 1, minWidth: 0 }}>
+    <div style={{ minWidth: 0 }}>
+      {/* 资源历史曲线：随断点 4 / 2 / 1 列自适应 */}
+      <Row gutter={[spacing.lg, spacing.lg]} style={{ display: "flex", alignItems: "stretch" }}>
+        <Col xs={24} md={12} xl={6} style={{ display: "flex" }}>
+          <div style={{ flex: 1, minWidth: 0, width: "100%" }}>
             <ResourceHistoryChart
               kind="cpu"
               history={history}
               resource={resource}
-              height={110}
+              height={chartHeight}
             />
           </div>
         </Col>
-        <Col span={6} style={{ display: "flex" }}>
-          <div style={{ flex: 1, minWidth: 0 }}>
+        <Col xs={24} md={12} xl={6} style={{ display: "flex" }}>
+          <div style={{ flex: 1, minWidth: 0, width: "100%" }}>
             <ResourceHistoryChart
               kind="memory"
               history={history}
               resource={resource}
-              height={110}
+              height={chartHeight}
             />
           </div>
         </Col>
-        <Col span={6} style={{ display: "flex" }}>
-          <div style={{ flex: 1, minWidth: 0 }}>
+        <Col xs={24} md={12} xl={6} style={{ display: "flex" }}>
+          <div style={{ flex: 1, minWidth: 0, width: "100%" }}>
             <ResourceHistoryChart
               kind="gpu"
               history={history}
               resource={resource}
-              height={110}
+              height={chartHeight}
             />
           </div>
         </Col>
-        <Col span={6} style={{ display: "flex" }}>
+        <Col xs={24} md={12} xl={6} style={{ display: "flex" }}>
           <Card
             style={{
               flex: 1,
               height: "100%",
+              width: "100%",
               borderRadius: borderRadius.card,
               border: "1px solid rgba(0,0,0,0.06)",
               boxShadow: "none",
@@ -296,8 +311,8 @@ export default function Dashboard() {
         </Col>
       </Row>
 
-      <Row gutter={[16, 16]} style={{ marginTop: 16 }}>
-        <Col span={16}>
+      <Row gutter={[spacing.lg, spacing.lg]} style={{ marginTop: spacing.lg }}>
+        <Col xs={24} lg={16}>
           <Card
             title="服务列表"
             style={{
@@ -312,6 +327,7 @@ export default function Dashboard() {
               rowKey={(r) => r.config.id}
               pagination={false}
               size="small"
+              scroll={{ x: 560 }}
               rowClassName={(record) => {
                 if (record.status === "error" || record.status === "failed")
                   return "row-error";
@@ -325,7 +341,7 @@ export default function Dashboard() {
             />
           </Card>
         </Col>
-        <Col span={8}>
+        <Col xs={24} lg={8}>
           <Card
             title="内存占用 Top 5"
             style={{

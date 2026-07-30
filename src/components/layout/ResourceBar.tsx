@@ -18,12 +18,17 @@ import {
 interface ResourceBarProps {
   /** 是否暗色主题（由 AppLayout 传入） */
   isDark?: boolean;
+  /** 窄屏紧凑：隐藏 MEM/GPU 附加文案，允许换行 */
+  compact?: boolean;
 }
 
 /**
- * 顶部资源条：玻璃质感对齐托盘顶栏；Pill 展示 CPU/MEM/GPU。
+ * 顶部资源条：玻璃质感对齐托盘顶栏；窄屏下紧凑换行。
  */
-export default function ResourceBar({ isDark = false }: ResourceBarProps) {
+export default function ResourceBar({
+  isDark = false,
+  compact = false,
+}: ResourceBarProps) {
   const { token } = theme.useToken();
   const [resource, setResource] = useState<SystemResource | null>(null);
   const [runningCount, setRunningCount] = useState(0);
@@ -134,18 +139,22 @@ export default function ResourceBar({ isDark = false }: ResourceBarProps) {
   return (
     <div
       style={{
-        height: 44,
+        minHeight: compact ? 40 : 44,
         display: "flex",
         alignItems: "center",
-        padding: `0 ${spacing.xl}px`,
+        flexWrap: "wrap",
+        rowGap: spacing.xs,
+        padding: compact
+          ? `${spacing.xs}px ${spacing.md}px`
+          : `0 ${spacing.xl}px`,
         borderBottom: `1px solid ${token.colorBorderSecondary}`,
         background: isDark ? token.colorBgContainer : glassFillLight,
         backdropFilter: isDark ? undefined : glassBlur,
         WebkitBackdropFilter: isDark ? undefined : glassBlur,
-        gap: spacing.xl,
+        gap: compact ? spacing.md : spacing.xl,
       }}
     >
-      <Space size={spacing.lg}>
+      <Space size={compact ? spacing.sm : spacing.lg} wrap>
         {renderPill("CPU", resource.cpu_percent, {
           warning: 50,
           danger: 80,
@@ -154,19 +163,23 @@ export default function ResourceBar({ isDark = false }: ResourceBarProps) {
           "MEM",
           resource.memory_percent,
           { warning: 60, danger: 85 },
-          `${resource.memory_used_gb.toFixed(1)} / ${resource.memory_total_gb.toFixed(0)} GB`
+          compact
+            ? undefined
+            : `${resource.memory_used_gb.toFixed(1)} / ${resource.memory_total_gb.toFixed(0)} GB`
         )}
         {resource.gpu_percent != null &&
           renderPill(
             "GPU",
             resource.gpu_percent,
             { warning: 50, danger: 80 },
-            resource.gpu_memory_used_mb != null
-              ? `${resource.gpu_memory_used_mb.toFixed(0)} MB`
-              : undefined
+            compact
+              ? undefined
+              : resource.gpu_memory_used_mb != null
+                ? `${resource.gpu_memory_used_mb.toFixed(0)} MB`
+                : undefined
           )}
       </Space>
-      <div style={{ flex: 1 }} />
+      <div style={{ flex: 1, minWidth: spacing.sm }} />
       <div
         style={{
           display: "inline-flex",
@@ -181,6 +194,7 @@ export default function ResourceBar({ isDark = false }: ResourceBarProps) {
           border: `1px solid ${token.colorBorderSecondary}`,
           fontSize: fontSizes.SM.size,
           color: token.colorTextSecondary,
+          flexShrink: 0,
         }}
       >
         <span
@@ -192,7 +206,9 @@ export default function ResourceBar({ isDark = false }: ResourceBarProps) {
             flexShrink: 0,
           }}
         />
-        运行中 {runningCount} / {totalCount}
+        {compact
+          ? `${runningCount}/${totalCount}`
+          : `运行中 ${runningCount} / ${totalCount}`}
       </div>
     </div>
   );

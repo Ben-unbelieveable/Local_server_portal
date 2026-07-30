@@ -11,18 +11,19 @@
   },
   "app": {
     "withGlobalTauri": true,
+    "macOSPrivateApi": true,
     "windows": [
       {
         "title": "本地服务管理平台",
         "width": 1200,
         "height": 800,
-        "minWidth": 900,
-        "minHeight": 600,
+        "minWidth": 960,
+        "minHeight": 640,
         "center": true
       }
     ],
     "trayIcon": {
-      "iconPath": "icons/icon.png",
+      "iconPath": "icons/tray-icon.png",
       "iconAsTemplate": false
     },
     "security": {
@@ -32,6 +33,20 @@
   "plugins": {
     "shell": {
       "open": true
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["app", "dmg"],
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "macOS": {
+      "minimumSystemVersion": "10.15"
     }
   }
 }

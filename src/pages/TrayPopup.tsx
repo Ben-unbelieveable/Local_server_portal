@@ -5,10 +5,11 @@ import {
   CloseOutlined,
   EditOutlined,
   PlusOutlined,
+  PoweroffOutlined,
 } from "@ant-design/icons";
 import { useEffect, useState, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { api } from "../api";
+import { api, isTauriEnv } from "../api";
 import { useTauriEvent } from "../hooks/useTauriEvent";
 import type {
   ServiceRuntime,
@@ -56,7 +57,21 @@ export default function TrayPopup() {
   }, []);
 
   useEffect(() => {
+    document.documentElement.classList.add("tray-popup-window");
+    return () => {
+      document.documentElement.classList.remove("tray-popup-window");
+    };
+  }, []);
+
+  useEffect(() => {
     fetchData();
+  }, [fetchData]);
+
+  // 浏览器打开托盘路由时同样走本机桥轮询
+  useEffect(() => {
+    if (isTauriEnv) return;
+    const timer = setInterval(fetchData, 2000);
+    return () => clearInterval(timer);
   }, [fetchData]);
 
   useTauriEvent<ResourceUpdateEvent>("resource-update", (payload) => {
@@ -114,6 +129,18 @@ export default function TrayPopup() {
     }
   };
 
+  /**
+   * 彻底退出应用（停止托管服务 + 结束进程，含托盘）。
+   * 与顶栏「关闭」仅隐藏弹窗不同。
+   */
+  const handleQuitApp = async () => {
+    try {
+      await api.quitApp();
+    } catch {
+      /* ignore */
+    }
+  };
+
   const handleAdd = () => {
     setEditingService(null);
     setModalOpen(true);
@@ -132,19 +159,7 @@ export default function TrayPopup() {
   const runningCount = services.filter((s) => s.status === "running").length;
 
   return (
-    <div
-      style={{
-        width: "100vw",
-        height: "100vh",
-        background:
-          "linear-gradient(180deg, #e6f4ff 0%, #f0f7ff 50%, #ffffff 100%)",
-        overflow: "hidden",
-        display: "flex",
-        flexDirection: "column",
-        fontFamily:
-          "-apple-system, BlinkMacSystemFont, 'PingFang SC', sans-serif",
-      }}
-    >
+    <div className="tray-popup-shell">
       {/* 顶部标题栏（可拖拽） */}
       <div
         style={
@@ -185,6 +200,7 @@ export default function TrayPopup() {
             type="text"
             icon={<CloseOutlined />}
             onClick={handleClose}
+            title="关闭面板"
           />
         </Space>
       </div>
@@ -363,22 +379,37 @@ export default function TrayPopup() {
         </div>
       </div>
 
-      {/* 底部状态栏 */}
+      {/* 底部：运行计数 + 退出应用（彻底结束托盘） */}
       <div
         style={{
-          padding: `${spacing.xs + 2}px ${spacing.md}px`,
+          padding: `${spacing.sm}px ${spacing.md}px`,
           borderTop: `1px solid ${neutralColors.colorBorderSecondary}`,
-          background: "rgba(255,255,255,0.6)",
-          fontSize: fontSizes.XS.size,
-          color: neutralColors.colorTextSecondary,
+          background: "rgba(255,255,255,0.75)",
           display: "flex",
+          alignItems: "center",
           justifyContent: "space-between",
+          gap: spacing.sm,
         }}
       >
-        <span>
+        <Typography.Text
+          type="secondary"
+          style={{ fontSize: fontSizes.XS.size }}
+        >
           {runningCount} / {services.length} 运行中
-        </span>
-        <span>v0.1.0</span>
+        </Typography.Text>
+        <Button
+          danger
+          type="primary"
+          size="small"
+          icon={<PoweroffOutlined />}
+          onClick={handleQuitApp}
+          style={{
+            borderRadius: borderRadius.button,
+            fontWeight: 500,
+          }}
+        >
+          退出应用
+        </Button>
       </div>
 
       <ServiceConfigModal

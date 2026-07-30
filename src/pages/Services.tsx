@@ -75,6 +75,18 @@ export default function Services() {
     fetchServices();
   }, [fetchServices]);
 
+  // 浏览器：轮询本机桥，与桌面壳数据同步（静默失败，避免未启动桌面时刷屏）
+  useEffect(() => {
+    if (isTauriEnv) return;
+    const timer = setInterval(() => {
+      api
+        .getServices()
+        .then(setServices)
+        .catch(() => {});
+    }, 2000);
+    return () => clearInterval(timer);
+  }, []);
+
   useEffect(() => {
     const highlight = searchParams.get("highlight");
     if (highlight) {
@@ -358,11 +370,12 @@ export default function Services() {
   ];
 
   return (
-    <div>
+    <div style={{ minWidth: 0 }}>
       <div
         style={{
           marginBottom: spacing.md,
           display: "flex",
+          flexWrap: "wrap",
           gap: spacing.sm,
           alignItems: "center",
         }}
@@ -392,7 +405,7 @@ export default function Services() {
           placeholder="搜索服务名称..."
           value={searchText}
           onChange={(e) => setSearchText(e.target.value)}
-          style={{ maxWidth: 300 }}
+          style={{ flex: "1 1 180px", maxWidth: 300, minWidth: 140 }}
         />
       </div>
 
@@ -400,10 +413,12 @@ export default function Services() {
         style={{
           marginBottom: spacing.md,
           display: "flex",
+          flexWrap: "wrap",
           justifyContent: "flex-end",
+          gap: spacing.sm,
         }}
       >
-        <Space>
+        <Space wrap>
           {selectedRowKeys.length > 0 && (
             <>
               <Button icon={<PlayCircleOutlined />} onClick={handleBatchStart}>
@@ -436,6 +451,7 @@ export default function Services() {
           }}
           pagination={false}
           size="middle"
+          scroll={{ x: 900 }}
           locale={{
             emptyText: (
               <Empty description="还没有服务">
