@@ -1,0 +1,91 @@
+# 推送版本 tag（v*）时自动构建 macOS DMG 并发布到 GitHub Releases。
+# 社区方案：Tauri 官方 tauri-apps/tauri-action
+# 参考：https://v2.tauri.app/distribute/pipelines/github/
+#
+# 使用方式：
+#   git tag v1.0.0
+#   git push origin v1.0.0
+#
+# 注意：
+# - macOS DMG 必须在 macos-latest Runner 上构建
+# - 未配置 Apple 签名时 DMG 可构建，但用户首次打开可能需「右键 → 打开」
+# - 仓库 Settings → Actions → Workflow permissions 需开启 Read and write
+
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release-macos:
+    runs-on: macos-latest
+    timeout-minutes: 90
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate tag and sync version
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          if ! echo "$TAG" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$'; then
+            echo "Tag must look like v1.0.0 (semver), got: $TAG"
+            exit 1
+          fi
+          VERSION="${TAG#v}"
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+          echo "Syncing project version to $VERSION"
+          jq --arg v "$VERSION" '.version = $v' src-tauri/tauri.conf.json > /tmp/tauri.conf.json
+          mv /tmp/tauri.conf.json src-tauri/tauri.conf.json
+          jq --arg v "$VERSION" '.version = $v' package.json > /tmp/package.json
+          mv /tmp/package.json package.json
+          perl -pi -e 's/^version = ".*"/version = "'"$VERSION"'"/' src-tauri/Cargo.toml
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.28.2
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: ./src-tauri -> target
+
+      - name: Install frontend dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build DMG and publish GitHub Release
+        uses: tauri-apps/tauri-action@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: LocalServiceManager ${{ github.ref_name }}
+          releaseBody: |
+            macOS Apple Silicon (aarch64) 安装包。
+
+            ## 安装
+            下载 `.dmg`，打开后将应用拖入「应用程序」文件夹。
+
+            ## 说明
+            - 若系统提示无法验证开发者，请右键应用 → **打开**
+            - 本工具以菜单栏托盘为主；关闭主窗口后托盘继续运行
+          releaseDraft: false
+          prerelease: false
+          args: --target aarch64-apple-darwin --bundles dmg
