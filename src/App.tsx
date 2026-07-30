@@ -1,5 +1,5 @@
 import { Routes, Route } from "react-router-dom";
-import { ConfigProvider, theme } from "antd";
+import { ConfigProvider, theme, App as AntdApp } from "antd";
 import { useState, useEffect } from "react";
 import AppLayout from "./components/layout/AppLayout";
 import Dashboard from "./pages/Dashboard";
@@ -40,7 +40,9 @@ export default function App() {
           token: antdThemeToken,
         }}
       >
-        <TrayPopup />
+        <AntdApp>
+          <TrayPopup />
+        </AntdApp>
       </ConfigProvider>
     );
   }

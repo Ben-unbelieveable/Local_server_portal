@@ -4,10 +4,24 @@ pub mod services;
 
 use services::resource_monitor::ResourceMonitor;
 use services::service_manager::AppState;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
-use tauri::Manager;
+use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::Emitter;
 use tauri::Listener;
+use tauri::Manager;
+
+/// 托盘弹窗因失焦隐藏后，短暂忽略随后的托盘点击，避免「失焦隐藏 → 托盘点击又立刻显示」竞态。
+/// 值为 Unix 毫秒时间戳：在此时间之前的 toggle 若本意是「显示」，将被跳过。
+pub static TRAY_IGNORE_SHOW_UNTIL_MS: AtomicU64 = AtomicU64::new(0);
+
+/// 当前 Unix 毫秒时间戳
+fn now_ms() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_millis() as u64)
+        .unwrap_or(0)
+}
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -37,11 +51,12 @@ pub fn run() {
                     // 采集系统资源
                     let sys_res = ResourceMonitor::get_system_resources();
 
-                    // 写入缓存，供 get_system_resources 命令即时返回（避免每次调用都重算约 500ms）
-                    {
+                    // 写入缓存 + 历史环形缓冲，并取出 history 供事件推送
+                    let history = {
                         let mut mgr = manager_monitor.lock().await;
                         mgr.set_system_resource(sys_res.clone());
-                    }
+                        mgr.get_resource_history()
+                    };
 
                     // 采集服务资源
                     let mut svc_resources = Vec::new();
@@ -55,7 +70,11 @@ pub fn run() {
                                     pid,
                                     service.uptime_secs,
                                 );
-                                mgr.update_resource(&service.config.id, res.cpu_percent, res.memory_mb);
+                                mgr.update_resource(
+                                    &service.config.id,
+                                    res.cpu_percent,
+                                    res.memory_mb,
+                                );
                                 svc_resources.push(res);
                             }
                         }
@@ -63,12 +82,13 @@ pub fn run() {
                         mgr.check_process_alive();
                     }
 
-                    // 推送资源更新事件
+                    // 推送资源更新事件（含启动后历史曲线）
                     let _ = app_handle_monitor.emit(
                         "resource-update",
                         crate::models::ResourceUpdateEvent {
                             system: sys_res,
                             services: svc_resources,
+                            history,
                         },
                     );
                 }
@@ -116,10 +136,13 @@ pub fn run() {
                             m.on_process_error(&service_id, &error_msg);
                         }
                         // 发送系统通知
-                        let _ = handle.emit("show-notification", serde_json::json!({
-                            "title": "服务异常",
-                            "body": format!("服务异常退出: {}", error_msg),
-                        }));
+                        let _ = handle.emit(
+                            "show-notification",
+                            serde_json::json!({
+                                "title": "服务异常",
+                                "body": format!("服务异常退出: {}", error_msg),
+                            }),
+                        );
                     });
                 }
             });
@@ -128,13 +151,13 @@ pub fn run() {
             app.manage(state);
 
             // 创建托盘弹窗窗口（默认隐藏，点击托盘图标时显示）
-            let _tray_popup = tauri::WebviewWindowBuilder::new(
+            let tray_popup = tauri::WebviewWindowBuilder::new(
                 &app_handle,
                 "tray-popup",
                 tauri::WebviewUrl::App("index.html#/tray-popup".into()),
             )
             .title("服务快速管理")
-            .inner_size(380.0, 640.0)
+            .inner_size(380.0, 720.0)
             .decorations(false)
             .always_on_top(true)
             .skip_taskbar(true)
@@ -143,13 +166,22 @@ pub fn run() {
             .focused(false)
             .build();
 
-            // 给配置自动创建的托盘图标（tauri.conf.json 中 trayIcon.id = "main"）挂上点击事件回调。
-            //
-            // 之所以在 Rust 端处理点击事件，而不是沿用前端 useSystemTray.ts 中的
-            // TrayIcon.removeById + TrayIcon.new 逻辑，是因为：
-            //   1. JS 端 defaultWindowIcon() 在未配置应用默认窗口图标时返回 null；
-            //   2. 用 null 图标重建托盘后，macOS 不会显示无图标的托盘项；
-            //   3. 配置自动创建的托盘本身带有正确图标，因此只需复用它并挂载事件即可。
+            // 点击屏幕其他位置（弹窗失焦）时自动隐藏托盘详情窗。
+            // 社区标准做法：WindowEvent::Focused(false) → hide。
+            // 与托盘再次点击存在竞态：失焦先触发 hide，随后托盘 Click 又会 show；
+            // 因此失焦隐藏后设置 350ms 忽略「显示」窗口。
+            if let Ok(win) = &tray_popup {
+                let hide_win = win.clone();
+                win.on_window_event(move |event| {
+                    if let tauri::WindowEvent::Focused(false) = event {
+                        let _ = hide_win.hide();
+                        TRAY_IGNORE_SHOW_UNTIL_MS
+                            .store(now_ms().saturating_add(350), Ordering::SeqCst);
+                    }
+                });
+            }
+
+            // 给配置自动创建的托盘图标挂上点击事件回调。
             if let Some(tray) = app.tray_by_id("main") {
                 let tray_app = app_handle.clone();
                 tray.on_tray_icon_event(move |_tray, event| {
@@ -175,6 +207,7 @@ pub fn run() {
             commands::batch_stop,
             commands::get_system_resources,
             commands::get_service_resources,
+            commands::get_resource_history,
             commands::get_recent_logs,
             commands::search_logs,
             commands::get_history_logs,
@@ -187,6 +220,7 @@ pub fn run() {
             commands::shutdown_all_services,
             commands::toggle_tray_popup,
             commands::hide_tray_popup,
+            commands::show_main_window,
         ])
         .run(tauri::generate_context!())
         .expect("启动应用失败");

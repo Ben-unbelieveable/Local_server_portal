@@ -1,13 +1,16 @@
 use crate::models::{
-    AppConfig, BatchResult, ServiceConfig, ServiceRuntime, ServiceStatus, StatusChangeEvent,
-    SystemResource,
+    AppConfig, BatchResult, ResourceHistoryPoint, ServiceConfig, ServiceRuntime, ServiceStatus,
+    StatusChangeEvent, SystemResource,
 };
 use crate::services::config_manager::{load_config, save_config};
 use crate::services::log_manager::LogManager;
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
 use tauri::{AppHandle, Emitter};
 use tokio::sync::Mutex;
+
+/// 资源历史环形缓冲容量（约 2 分钟，按监控循环 ~1s/tick）
+const RESOURCE_HISTORY_CAPACITY: usize = 120;
 
 pub struct ServiceManager {
     services: HashMap<String, ServiceRuntime>,
@@ -16,6 +19,8 @@ pub struct ServiceManager {
     app_handle: AppHandle,
     /// 系统资源快照缓存，由监控循环每 tick 写入，供 get_system_resources 命令即时返回
     system_resource: Option<SystemResource>,
+    /// 启动后累计的资源历史（环形缓冲，供面积图展示周期变化）
+    resource_history: VecDeque<ResourceHistoryPoint>,
 }
 
 impl ServiceManager {
@@ -65,6 +70,7 @@ impl ServiceManager {
             log_manager,
             app_handle,
             system_resource: None,
+            resource_history: VecDeque::with_capacity(RESOURCE_HISTORY_CAPACITY),
         })
     }
 
@@ -86,9 +92,22 @@ impl ServiceManager {
         self.system_resource.clone()
     }
 
-    /// 监控循环写入最新系统资源快照。
+    /// 监控循环写入最新系统资源快照，并追加到历史环形缓冲。
+    ///
+    /// 输入：最新 `SystemResource`
+    /// 输出：无；副作用为更新缓存与 history（超出容量时丢弃最旧点）
     pub fn set_system_resource(&mut self, res: SystemResource) {
+        let point = ResourceHistoryPoint::from_system(&res);
+        if self.resource_history.len() >= RESOURCE_HISTORY_CAPACITY {
+            self.resource_history.pop_front();
+        }
+        self.resource_history.push_back(point);
         self.system_resource = Some(res);
+    }
+
+    /// 返回启动后累计的资源历史（按时间升序）。
+    pub fn get_resource_history(&self) -> Vec<ResourceHistoryPoint> {
+        self.resource_history.iter().cloned().collect()
     }
 
     /// 添加服务

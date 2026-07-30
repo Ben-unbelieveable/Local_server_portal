@@ -1,9 +1,13 @@
 use crate::models::{
-    BatchResult, LogEntry, ServiceConfig, ServiceResource, ServiceRuntime, SystemResource,
+    BatchResult, LogEntry, ResourceHistoryPoint, ServiceConfig, ServiceResource, ServiceRuntime,
+    SystemResource,
 };
 use crate::services::config_manager;
 use crate::services::resource_monitor::ResourceMonitor;
 use crate::services::service_manager::AppState;
+use crate::TRAY_IGNORE_SHOW_UNTIL_MS;
+use std::sync::atomic::Ordering;
+use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::{Manager, State};
 
 // ==================== 服务管理 Commands ====================
@@ -106,6 +110,15 @@ pub async fn get_service_resources(
     }
 
     Ok(resources)
+}
+
+/// 获取应用启动后累计的资源历史采样（环形缓冲，供面积图首屏渲染）
+#[tauri::command]
+pub async fn get_resource_history(
+    state: State<'_, AppState>,
+) -> Result<Vec<ResourceHistoryPoint>, String> {
+    let manager = state.manager.lock().await;
+    Ok(manager.get_resource_history())
 }
 
 // ==================== 日志 Commands ====================
@@ -217,6 +230,8 @@ pub async fn shutdown_all_services(state: State<'_, AppState>) -> Result<Vec<Bat
 ///
 /// 将可见性切换与窗口定位逻辑提取为同步函数，避免在 tray 事件回调中
 /// 无法使用 async command 的限制。
+///
+/// 若弹窗刚因失焦被隐藏，短暂忽略「再次显示」，避免托盘点击与失焦竞态导致闪烁重开。
 pub fn toggle_tray_popup_impl(app: &tauri::AppHandle) -> Result<bool, String> {
     if let Some(win) = app.get_webview_window("tray-popup") {
         let is_visible = win.is_visible().unwrap_or(false);
@@ -224,13 +239,22 @@ pub fn toggle_tray_popup_impl(app: &tauri::AppHandle) -> Result<bool, String> {
             let _ = win.hide();
             Ok(false)
         } else {
+            let now = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .map(|d| d.as_millis() as u64)
+                .unwrap_or(0);
+            let ignore_until = TRAY_IGNORE_SHOW_UNTIL_MS.load(Ordering::SeqCst);
+            if now < ignore_until {
+                // 失焦隐藏后紧跟着的托盘点击：保持隐藏，视为用户意图关闭
+                return Ok(false);
+            }
             // 定位到屏幕右上角（macOS menubar 下方）
             if let Ok(Some(monitor)) = app.primary_monitor() {
                 let screen_size = monitor.size();
                 let scale = monitor.scale_factor();
                 let win_size = win
                     .outer_size()
-                    .unwrap_or(tauri::PhysicalSize::new(380, 640));
+                    .unwrap_or(tauri::PhysicalSize::new(380, 720));
                 let x =
                     (screen_size.width as f64 / scale - win_size.width as f64 / scale - 16.0) as i32;
                 let y = 36i32; // menubar 高度
@@ -261,4 +285,32 @@ pub async fn hide_tray_popup(app: tauri::AppHandle) -> Result<(), String> {
         let _ = win.hide();
     }
     Ok(())
+}
+
+/// 显示并聚焦主窗口，同时隐藏托盘弹窗。
+///
+/// 从托盘 Webview 直接调用 `Window.getByLabel("main").show()` 常因 ACL
+///（权限仅作用于当前窗口）失败；改为 Rust 侧操作可可靠打开主窗口。
+#[tauri::command]
+pub async fn show_main_window(app: tauri::AppHandle) -> Result<(), String> {
+    // 先藏托盘，避免失焦竞态把用户注意力拉回弹窗
+    if let Some(popup) = app.get_webview_window("tray-popup") {
+        let _ = popup.hide();
+        crate::TRAY_IGNORE_SHOW_UNTIL_MS.store(
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_millis() as u64)
+                .unwrap_or(0)
+                .saturating_add(350),
+            Ordering::SeqCst,
+        );
+    }
+    if let Some(main) = app.get_webview_window("main") {
+        let _ = main.show();
+        let _ = main.unminimize();
+        let _ = main.set_focus();
+        Ok(())
+    } else {
+        Err("主窗口未创建".to_string())
+    }
 }

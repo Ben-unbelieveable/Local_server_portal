@@ -38,6 +38,31 @@ export interface SystemResource {
   gpu_percent?: number;
   gpu_memory_used_mb?: number;
   gpu_memory_total_mb?: number;
+  /** CPU 用户态占比 0~100 */
+  cpu_user_percent?: number;
+  /** CPU 内核态占比 0~100 */
+  cpu_system_percent?: number;
+  /** CPU 闲置占比 0~100 */
+  cpu_idle_percent?: number;
+  /** GPU 渲染利用率 */
+  gpu_renderer_percent?: number;
+  /** GPU Tiler 利用率 */
+  gpu_tiler_percent?: number;
+  /** GPU 核心数 */
+  gpu_core_count?: number;
+}
+
+/** 资源历史采样点（应用启动后累计） */
+export interface ResourceHistoryPoint {
+  ts: number;
+  cpu_percent: number;
+  memory_percent: number;
+  cpu_user_percent?: number;
+  cpu_system_percent?: number;
+  cpu_idle_percent?: number;
+  gpu_percent?: number;
+  gpu_renderer_percent?: number;
+  gpu_tiler_percent?: number;
 }
 
 export interface ServiceResource {
@@ -71,4 +96,6 @@ export interface StatusChangeEvent {
 export interface ResourceUpdateEvent {
   system: SystemResource;
   services: ServiceResource[];
+  /** 启动后采样的资源历史（环形缓冲） */
+  history: ResourceHistoryPoint[];
 }

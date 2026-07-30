@@ -66,7 +66,7 @@ pub struct ServiceRuntime {
     pub last_error: Option<String>,
 }
 
-/// 系统资源快照
+/// 系统资源快照（含可选细项，供堆叠面积图图例使用）
 #[derive(Debug, Clone, Serialize)]
 pub struct SystemResource {
     pub cpu_percent: f32,
@@ -77,6 +77,69 @@ pub struct SystemResource {
     pub gpu_percent: Option<f32>,
     pub gpu_memory_used_mb: Option<f64>,
     pub gpu_memory_total_mb: Option<f64>,
+    /// CPU 用户态占比（0~100），不可用时为 None
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cpu_user_percent: Option<f32>,
+    /// CPU 内核态占比（0~100）
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cpu_system_percent: Option<f32>,
+    /// CPU 闲置占比（0~100）
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cpu_idle_percent: Option<f32>,
+    /// GPU 渲染利用率（Apple Silicon ioreg Renderer Utilization %）
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub gpu_renderer_percent: Option<f32>,
+    /// GPU Tiler 利用率（Apple Silicon ioreg Tiler Utilization %）
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub gpu_tiler_percent: Option<f32>,
+    /// GPU 核心数（如 Apple Silicon 的 gpu-core-count）
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub gpu_core_count: Option<u32>,
+}
+
+/// 资源历史采样点（应用启动后由监控循环追加，环形缓冲）
+#[derive(Debug, Clone, Serialize)]
+pub struct ResourceHistoryPoint {
+    /// Unix 毫秒时间戳
+    pub ts: u64,
+    pub cpu_percent: f32,
+    pub memory_percent: f32,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cpu_user_percent: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cpu_system_percent: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cpu_idle_percent: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub gpu_percent: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub gpu_renderer_percent: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub gpu_tiler_percent: Option<f32>,
+}
+
+impl ResourceHistoryPoint {
+    /// 从当前系统资源快照构造历史点
+    ///
+    /// 输入：`SystemResource` 快照
+    /// 输出：带当前时间戳的历史采样点
+    pub fn from_system(res: &SystemResource) -> Self {
+        let ts = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_millis() as u64)
+            .unwrap_or(0);
+        Self {
+            ts,
+            cpu_percent: res.cpu_percent,
+            memory_percent: res.memory_percent,
+            cpu_user_percent: res.cpu_user_percent,
+            cpu_system_percent: res.cpu_system_percent,
+            cpu_idle_percent: res.cpu_idle_percent,
+            gpu_percent: res.gpu_percent,
+            gpu_renderer_percent: res.gpu_renderer_percent,
+            gpu_tiler_percent: res.gpu_tiler_percent,
+        }
+    }
 }
 
 /// 单个服务的资源快照
@@ -121,9 +184,11 @@ pub struct StatusChangeEvent {
     pub error: Option<String>,
 }
 
-/// 资源更新事件 payload
+/// 资源更新事件 payload（含启动后累计的历史曲线）
 #[derive(Debug, Clone, Serialize)]
 pub struct ResourceUpdateEvent {
     pub system: SystemResource,
     pub services: Vec<ServiceResource>,
+    /// 启动后采样的资源历史（环形缓冲，最新在末尾）
+    pub history: Vec<ResourceHistoryPoint>,
 }

@@ -3,6 +3,7 @@ import type {
   ServiceConfig,
   SystemResource,
   ServiceResource,
+  ResourceHistoryPoint,
   LogEntry,
   BatchResult,
   ServiceStatus,
@@ -183,7 +184,34 @@ const mockApi = {
       gpu_percent: 18.0,
       gpu_memory_used_mb: 2048.0,
       gpu_memory_total_mb: 21845.0,
+      cpu_user_percent: 14,
+      cpu_system_percent: 9.5,
+      cpu_idle_percent: 76.5,
+      gpu_renderer_percent: 12,
+      gpu_tiler_percent: 8,
+      gpu_core_count: 16,
     }),
+  getResourceHistory: (): Promise<ResourceHistoryPoint[]> => {
+    const now = Date.now();
+    const points: ResourceHistoryPoint[] = Array.from({ length: 30 }, (_, i) => {
+      const t = now - (29 - i) * 2000;
+      const cpu = 15 + Math.sin(i / 3) * 10 + (i % 5);
+      const mem = 35 + Math.cos(i / 4) * 5;
+      const gpu = Math.max(0, 20 + Math.sin(i / 2) * 25);
+      return {
+        ts: t,
+        cpu_percent: cpu,
+        memory_percent: mem,
+        cpu_user_percent: cpu * 0.6,
+        cpu_system_percent: cpu * 0.4,
+        cpu_idle_percent: 100 - cpu,
+        gpu_percent: gpu,
+        gpu_renderer_percent: gpu * 0.9,
+        gpu_tiler_percent: gpu * 0.7,
+      };
+    });
+    return delay(points);
+  },
   getServiceResources: () =>
     delay<ServiceResource[]>([
       { service_id: "antibody_annotation", cpu_percent: 2.3, memory_mb: 156.7, pid: 48210, uptime_secs: 3720 },
@@ -263,6 +291,7 @@ async function loadRealApi(): Promise<typeof mockApi> {
     batchStart: (ids: string[]) => invoke<BatchResult[]>("batch_start", { ids }),
     batchStop: (ids: string[]) => invoke<BatchResult[]>("batch_stop", { ids }),
     getSystemResources: () => invoke<SystemResource>("get_system_resources"),
+    getResourceHistory: () => invoke<ResourceHistoryPoint[]>("get_resource_history"),
     getServiceResources: () => invoke<ServiceResource[]>("get_service_resources"),
     getRecentLogs: (serviceId: string, count: number) => invoke<LogEntry[]>("get_recent_logs", { serviceId, count }),
     searchLogs: (serviceId: string, keyword: string) => invoke<LogEntry[]>("search_logs", { serviceId, keyword }),

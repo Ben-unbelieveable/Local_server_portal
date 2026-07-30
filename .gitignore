@@ -2,3 +2,4 @@ dev_log
 .cursor/
 .workbuddy/
 .workbuddy/memory/2026-07-30.md
+node_modules/
