@@ -6,10 +6,11 @@
 //! 风险：端口占用时桥无法启动；仅限本机回环，勿改绑 `0.0.0.0`。
 
 use crate::models::{
-    BatchResult, LogEntry, ResourceHistoryPoint, ServiceConfig, ServiceResource, ServiceRuntime,
-    SystemResource,
+    BatchResult, LogEntry, NetworkInfo, ResourceHistoryPoint, ServiceConfig, ServiceResource,
+    ServiceRuntime, SystemResource,
 };
 use crate::services::config_manager;
+use crate::services::network_info;
 use crate::services::resource_monitor::ResourceMonitor;
 use crate::services::service_manager::ServiceManager;
 use axum::body::Body;
@@ -204,6 +205,10 @@ async fn get_resource_history(
     Json(manager.get_resource_history())
 }
 
+async fn get_network_info() -> Json<NetworkInfo> {
+    Json(network_info::fetch_network_info().await)
+}
+
 #[derive(Deserialize)]
 struct LogsQuery {
     count: Option<u32>,
@@ -302,6 +307,7 @@ fn build_router(manager: SharedManager) -> Router {
         .route("/api/system-resources", get(get_system_resources))
         .route("/api/service-resources", get(get_service_resources))
         .route("/api/resource-history", get(get_resource_history))
+        .route("/api/network-info", get(get_network_info))
         .route("/api/logs/{service_id}/recent", get(get_recent_logs))
         .route("/api/logs/{service_id}/search", get(search_logs))
         .route("/api/logs/{service_id}/history", get(get_history_logs))

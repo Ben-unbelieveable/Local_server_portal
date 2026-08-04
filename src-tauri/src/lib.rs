@@ -255,6 +255,7 @@ pub fn run() {
             commands::get_system_resources,
             commands::get_service_resources,
             commands::get_resource_history,
+            commands::get_network_info,
             commands::get_recent_logs,
             commands::search_logs,
             commands::get_history_logs,

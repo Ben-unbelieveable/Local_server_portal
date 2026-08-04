@@ -184,6 +184,18 @@ pub struct StatusChangeEvent {
     pub error: Option<String>,
 }
 
+/// 本机网络信息（局域网 IPv4 + 公网 IP）
+#[derive(Debug, Clone, Serialize)]
+pub struct NetworkInfo {
+    /// 局域网 IPv4 列表（非 loopback）
+    pub lan_ips: Vec<String>,
+    /// 公网 IP；未联网或查询失败时为 None
+    pub public_ip: Option<String>,
+    /// 公网 IP 查询失败时的说明
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub public_ip_error: Option<String>,
+}
+
 /// 资源更新事件 payload（含启动后累计的历史曲线）
 #[derive(Debug, Clone, Serialize)]
 pub struct ResourceUpdateEvent {

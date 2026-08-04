@@ -163,6 +163,16 @@ export default function ResourceHistoryChart({
       ? `${resource.gpu_core_count} 核`
       : null;
 
+  /** 紧凑模式主指标（托盘单行三列） */
+  const primaryPercent =
+    kind === "cpu"
+      ? resource?.cpu_percent
+      : kind === "memory"
+        ? resource?.memory_percent
+        : (resource?.gpu_percent ??
+          resource?.gpu_renderer_percent ??
+          resource?.gpu_tiler_percent);
+
   const legends: LegendItem[] =
     kind === "cpu"
       ? [
@@ -265,7 +275,7 @@ export default function ResourceHistoryChart({
           >
             {title}
           </Typography.Text>
-          {subtitle && (
+          {!compact && subtitle && (
             <Typography.Text
               type="secondary"
               style={{
@@ -279,13 +289,26 @@ export default function ResourceHistoryChart({
             </Typography.Text>
           )}
         </div>
-        {extraRight && (
+        {compact ? (
           <Typography.Text
-            type="secondary"
-            style={{ fontSize: fontSizes.XS.size, flexShrink: 0 }}
+            strong
+            style={{
+              fontSize: fontSizes.SM.size,
+              flexShrink: 0,
+              fontVariantNumeric: "tabular-nums",
+            }}
           >
-            {extraRight}
+            {primaryPercent != null ? `${Math.round(primaryPercent)}%` : "—"}
           </Typography.Text>
+        ) : (
+          extraRight && (
+            <Typography.Text
+              type="secondary"
+              style={{ fontSize: fontSizes.XS.size, flexShrink: 0 }}
+            >
+              {extraRight}
+            </Typography.Text>
+          )
         )}
       </div>
 
@@ -294,7 +317,7 @@ export default function ResourceHistoryChart({
           height,
           background: "rgba(0,0,0,0.03)",
           borderRadius: 6,
-          marginBottom: spacing.sm,
+          marginBottom: compact ? 0 : spacing.sm,
         }}
       >
         <ResponsiveContainer width="100%" height="100%">
@@ -391,37 +414,39 @@ export default function ResourceHistoryChart({
         </ResponsiveContainer>
       </div>
 
-      <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-        {legends.map((item) => (
-          <div
-            key={item.key}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: spacing.sm,
-              fontSize: fontSizes.XS.size,
-            }}
-          >
-            <span
+      {!compact && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+          {legends.map((item) => (
+            <div
+              key={item.key}
               style={{
-                width: 10,
-                height: 10,
-                borderRadius: 2,
-                background: item.color,
-                flexShrink: 0,
+                display: "flex",
+                alignItems: "center",
+                gap: spacing.sm,
+                fontSize: fontSizes.XS.size,
               }}
-            />
-            <span style={{ flex: 1, color: "rgba(0,0,0,0.65)" }}>
-              {item.label}
-            </span>
-            <span
-              style={{ fontWeight: 500, fontVariantNumeric: "tabular-nums" }}
             >
-              {item.value != null ? `${Math.round(item.value)}%` : "—"}
-            </span>
-          </div>
-        ))}
-      </div>
+              <span
+                style={{
+                  width: 10,
+                  height: 10,
+                  borderRadius: 2,
+                  background: item.color,
+                  flexShrink: 0,
+                }}
+              />
+              <span style={{ flex: 1, color: "rgba(0,0,0,0.65)" }}>
+                {item.label}
+              </span>
+              <span
+                style={{ fontWeight: 500, fontVariantNumeric: "tabular-nums" }}
+              >
+                {item.value != null ? `${Math.round(item.value)}%` : "—"}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

@@ -80,6 +80,10 @@ jobs:
           releaseBody: |
             macOS Apple Silicon (aarch64) 安装包。
 
+            ## 本版更新
+            - 主窗口与托盘详情页展示局域网 / 公网 IP，支持点击复制
+            - 托盘详情页 CPU / 内存 / GPU 使用率单行三列展示
+
             ## 安装
             下载 `.dmg`，打开后将应用拖入「应用程序」文件夹。
 

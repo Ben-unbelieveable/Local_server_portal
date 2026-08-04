@@ -1,10 +1,11 @@
 import { Space, Typography, theme } from "antd";
 import { useEffect, useState } from "react";
-import type { SystemResource } from "../../types";
+import type { SystemResource, NetworkInfo } from "../../types";
 import type { ThresholdConfig } from "../../styles/tokens";
 import { api } from "../../api";
 import { useTauriEvent } from "../../hooks/useTauriEvent";
 import type { ResourceUpdateEvent } from "../../types";
+import NetworkIpPills from "../common/NetworkIpPills";
 import {
   fontSizes,
   spacing,
@@ -31,16 +32,19 @@ export default function ResourceBar({
 }: ResourceBarProps) {
   const { token } = theme.useToken();
   const [resource, setResource] = useState<SystemResource | null>(null);
+  const [networkInfo, setNetworkInfo] = useState<NetworkInfo | null>(null);
   const [runningCount, setRunningCount] = useState(0);
   const [totalCount, setTotalCount] = useState(0);
 
   const fetchResources = async () => {
     try {
-      const [res, services] = await Promise.all([
+      const [res, services, net] = await Promise.all([
         api.getSystemResources(),
         api.getServices(),
+        api.getNetworkInfo(),
       ]);
       setResource(res);
+      setNetworkInfo(net);
       setTotalCount(services.length);
       setRunningCount(services.filter((s) => s.status === "running").length);
     } catch {
@@ -51,7 +55,13 @@ export default function ResourceBar({
   useEffect(() => {
     fetchResources();
     const interval = setInterval(fetchResources, 3000);
-    return () => clearInterval(interval);
+    const netInterval = setInterval(() => {
+      api.getNetworkInfo().then(setNetworkInfo).catch(() => {});
+    }, 60000);
+    return () => {
+      clearInterval(interval);
+      clearInterval(netInterval);
+    };
   }, []);
 
   useTauriEvent<ResourceUpdateEvent>("resource-update", (payload) => {
@@ -179,6 +189,13 @@ export default function ResourceBar({
                 : undefined
           )}
       </Space>
+      {networkInfo && (
+        <NetworkIpPills
+          networkInfo={networkInfo}
+          compact={compact}
+          isDark={isDark}
+        />
+      )}
       <div style={{ flex: 1, minWidth: spacing.sm }} />
       <div
         style={{

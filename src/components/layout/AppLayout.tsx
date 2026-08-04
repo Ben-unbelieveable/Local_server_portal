@@ -137,7 +137,7 @@ export default function AppLayout({ children, isDark, onToggleTheme }: Props) {
                 type="secondary"
                 style={{ fontSize: fontSizes.SM.size }}
               >
-                v0.1.0
+                v1.0.1
               </Typography.Text>
             )}
           </div>

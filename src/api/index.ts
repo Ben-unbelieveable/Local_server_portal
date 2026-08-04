@@ -7,6 +7,7 @@ import type {
   LogEntry,
   BatchResult,
   AppPreferences,
+  NetworkInfo,
 } from "../types";
 
 // ==================== 环境检测 ====================
@@ -66,6 +67,7 @@ type AppApi = {
   getSystemResources: () => Promise<SystemResource>;
   getResourceHistory: () => Promise<ResourceHistoryPoint[]>;
   getServiceResources: () => Promise<ServiceResource[]>;
+  getNetworkInfo: () => Promise<NetworkInfo>;
   getRecentLogs: (serviceId: string, count: number) => Promise<LogEntry[]>;
   searchLogs: (serviceId: string, keyword: string) => Promise<LogEntry[]>;
   getHistoryLogs: (serviceId: string, date: string) => Promise<LogEntry[]>;
@@ -128,6 +130,7 @@ const bridgeApi: AppApi = {
     bridgeFetch<ResourceHistoryPoint[]>("/api/resource-history"),
   getServiceResources: () =>
     bridgeFetch<ServiceResource[]>("/api/service-resources"),
+  getNetworkInfo: () => bridgeFetch<NetworkInfo>("/api/network-info"),
   getRecentLogs: (serviceId, count) =>
     bridgeFetch<LogEntry[]>(
       `/api/logs/${encodeURIComponent(serviceId)}/recent?count=${count}`
@@ -195,6 +198,7 @@ async function loadRealApi(): Promise<AppApi> {
       invoke<ResourceHistoryPoint[]>("get_resource_history"),
     getServiceResources: () =>
       invoke<ServiceResource[]>("get_service_resources"),
+    getNetworkInfo: () => invoke<NetworkInfo>("get_network_info"),
     getRecentLogs: (serviceId: string, count: number) =>
       invoke<LogEntry[]>("get_recent_logs", { serviceId, count }),
     searchLogs: (serviceId: string, keyword: string) =>

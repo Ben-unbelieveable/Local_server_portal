@@ -17,6 +17,7 @@ import type {
   ResourceUpdateEvent,
   StatusChangeEvent,
   ResourceHistoryPoint,
+  NetworkInfo,
 } from "../types";
 import {
   semanticColors,
@@ -28,11 +29,13 @@ import {
 import ServicePowerToggle from "../components/common/ServicePowerToggle";
 import ServiceConfigModal from "../components/common/ServiceConfigModal";
 import ResourceHistoryChart from "../components/common/ResourceHistoryChart";
+import NetworkIpPills from "../components/common/NetworkIpPills";
 
 export default function TrayPopup() {
   const [services, setServices] = useState<ServiceRuntime[]>([]);
   const [resource, setResource] = useState<SystemResource | null>(null);
   const [history, setHistory] = useState<ResourceHistoryPoint[]>([]);
+  const [networkInfo, setNetworkInfo] = useState<NetworkInfo | null>(null);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
   const [editingService, setEditingService] = useState<ServiceRuntime | null>(
@@ -41,14 +44,16 @@ export default function TrayPopup() {
 
   const fetchData = useCallback(async () => {
     try {
-      const [svc, res, hist] = await Promise.all([
+      const [svc, res, hist, net] = await Promise.all([
         api.getServices(),
         api.getSystemResources(),
         api.getResourceHistory(),
+        api.getNetworkInfo(),
       ]);
       setServices(svc);
       setResource(res);
       setHistory(hist);
+      setNetworkInfo(net);
     } catch {
       // ignore
     } finally {
@@ -65,6 +70,10 @@ export default function TrayPopup() {
 
   useEffect(() => {
     fetchData();
+    const netInterval = setInterval(() => {
+      api.getNetworkInfo().then(setNetworkInfo).catch(() => {});
+    }, 60000);
+    return () => clearInterval(netInterval);
   }, [fetchData]);
 
   // 浏览器打开托盘路由时同样走本机桥轮询
@@ -207,11 +216,11 @@ export default function TrayPopup() {
 
       {/* 内容区 */}
       <div style={{ flex: 1, overflowY: "auto", padding: fontSizes.MD.size }}>
-        {/* 资源历史曲线：CPU / 内存 / GPU */}
+        {/* 资源历史曲线：CPU / 内存 / GPU 单行三列 */}
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "1fr 1fr",
+            gridTemplateColumns: "1fr 1fr 1fr",
             gap: spacing.sm,
             marginBottom: spacing.md,
           }}
@@ -220,25 +229,38 @@ export default function TrayPopup() {
             kind="cpu"
             history={history}
             resource={resource}
-            height={72}
+            height={64}
             compact
           />
           <ResourceHistoryChart
             kind="memory"
             history={history}
             resource={resource}
-            height={72}
+            height={64}
             compact
           />
-          <div style={{ gridColumn: "1 / span 2" }}>
-            <ResourceHistoryChart
-              kind="gpu"
-              history={history}
-              resource={resource}
-              height={72}
-              compact
-            />
-          </div>
+          <ResourceHistoryChart
+            kind="gpu"
+            history={history}
+            resource={resource}
+            height={64}
+            compact
+          />
+        </div>
+
+        {/* 局域网 / 公网 IP */}
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "center",
+            marginBottom: spacing.md,
+          }}
+        >
+          <NetworkIpPills
+            networkInfo={networkInfo}
+            compact
+            variant="card"
+          />
         </div>
 
         {/* 服务列表 */}

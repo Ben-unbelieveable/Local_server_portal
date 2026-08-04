@@ -1,6 +1,6 @@
 [package]
 name = "local-service-manager"
-version = "0.1.0"
+version = "1.0.1"
 description = "跨平台本地服务管理工具"
 authors = ["dev"]
 edition = "2021"
@@ -31,6 +31,7 @@ thiserror = "1"
 uuid = { version = "1", features = ["v4"] }
 axum = "0.8"
 tauri-plugin-autostart = "2"
+if-addrs = "0.13"
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"

@@ -1,3 +1,13 @@
+/** 本机网络信息 */
+export interface NetworkInfo {
+  /** 局域网 IPv4 列表 */
+  lan_ips: string[];
+  /** 公网 IP */
+  public_ip?: string | null;
+  /** 公网 IP 查询失败说明 */
+  public_ip_error?: string;
+}
+
 export interface ServiceConfig {
   id: string;
   name: string;

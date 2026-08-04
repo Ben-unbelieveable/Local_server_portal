@@ -1,8 +1,9 @@
 use crate::models::{
-    BatchResult, LogEntry, ResourceHistoryPoint, ServiceConfig, ServiceResource, ServiceRuntime,
-    SystemResource,
+    BatchResult, LogEntry, NetworkInfo, ResourceHistoryPoint, ServiceConfig, ServiceResource,
+    ServiceRuntime, SystemResource,
 };
 use crate::services::config_manager;
+use crate::services::network_info;
 use crate::services::preferences::{self, AppPreferences};
 use crate::services::resource_monitor::ResourceMonitor;
 use crate::services::service_manager::AppState;
@@ -120,6 +121,12 @@ pub async fn get_resource_history(
 ) -> Result<Vec<ResourceHistoryPoint>, String> {
     let manager = state.manager.lock().await;
     Ok(manager.get_resource_history())
+}
+
+/// 获取本机局域网 IPv4 与公网 IP
+#[tauri::command]
+pub async fn get_network_info() -> Result<NetworkInfo, String> {
+    Ok(network_info::fetch_network_info().await)
 }
 
 // ==================== 日志 Commands ====================
