@@ -101,6 +101,10 @@ export default function Services() {
     fetchServices();
   });
 
+  useTauriEvent("config-reloaded", () => {
+    fetchServices();
+  });
+
   const openServiceUrl = (url: string) => {
     if (isTauriEnv) {
       import("@tauri-apps/plugin-shell")

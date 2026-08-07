@@ -268,7 +268,10 @@ struct ContentBody {
     content: String,
 }
 
-async fn save_config_raw(Json(body): Json<ContentBody>) -> Result<StatusCode, Response> {
+async fn save_config_raw(
+    State(mgr): State<SharedManager>,
+    Json(body): Json<ContentBody>,
+) -> Result<StatusCode, Response> {
     config_manager::validate_yaml(&body.content)
         .map_err(|e| err_response(StatusCode::BAD_REQUEST, e))?;
     std::fs::write(config_manager::config_path(), &body.content).map_err(|e| {
@@ -277,6 +280,10 @@ async fn save_config_raw(Json(body): Json<ContentBody>) -> Result<StatusCode, Re
             format!("保存配置失败: {}", e),
         )
     })?;
+    mgr.lock()
+        .await
+        .reload_config_from_disk()
+        .map_err(|e| err_response(StatusCode::INTERNAL_SERVER_ERROR, e))?;
     Ok(StatusCode::NO_CONTENT)
 }
 

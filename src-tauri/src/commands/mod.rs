@@ -177,11 +177,15 @@ pub async fn get_config_raw() -> Result<String, String> {
 }
 
 #[tauri::command]
-pub async fn save_config_raw(content: String) -> Result<(), String> {
-    // 先校验格式
+pub async fn save_config_raw(
+    state: State<'_, AppState>,
+    content: String,
+) -> Result<(), String> {
     config_manager::validate_yaml(&content)?;
     std::fs::write(config_manager::config_path(), &content)
-        .map_err(|e| format!("保存配置文件失败: {}", e))
+        .map_err(|e| format!("保存配置文件失败: {}", e))?;
+    let mut manager = state.manager.lock().await;
+    manager.reload_config_from_disk()
 }
 
 #[tauri::command]

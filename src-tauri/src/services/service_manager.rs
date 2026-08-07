@@ -110,6 +110,49 @@ impl ServiceManager {
         self.resource_history.iter().cloned().collect()
     }
 
+    /// 从磁盘重新加载 config.yaml 并合并运行时状态。
+    ///
+    /// 已存在的服务保留 pid、状态与资源指标，仅更新 config 字段；
+    /// 新增服务默认 Stopped，并按端口做启动期探测；YAML 中移除的服务从列表删除（不主动杀进程）。
+    ///
+    /// 输入：无（读取 config_path）
+    /// 输出：Ok 后内存服务列表与文件一致，并 emit `config-reloaded`
+    pub fn reload_config_from_disk(&mut self) -> Result<(), String> {
+        let new_config = load_config()?;
+        let mut new_services = HashMap::new();
+
+        for svc in &new_config.services {
+            if let Some(existing) = self.services.get(&svc.id) {
+                let mut runtime = existing.clone();
+                runtime.config = svc.clone();
+                new_services.insert(svc.id.clone(), runtime);
+            } else {
+                let mut runtime = ServiceRuntime {
+                    config: svc.clone(),
+                    status: ServiceStatus::Stopped,
+                    pid: None,
+                    cpu_percent: 0.0,
+                    memory_mb: 0.0,
+                    uptime_secs: 0,
+                    restart_count: 0,
+                    last_error: None,
+                };
+                if let Some(port) = svc.port {
+                    if Self::port_is_listening(port) {
+                        runtime.status = ServiceStatus::Running;
+                        runtime.pid = Self::pid_listening_on_port(port);
+                    }
+                }
+                new_services.insert(svc.id.clone(), runtime);
+            }
+        }
+
+        self.services = new_services;
+        self.config = new_config;
+        let _ = self.app_handle.emit("config-reloaded", ());
+        Ok(())
+    }
+
     /// 添加服务
     pub fn add_service(&mut self, config: ServiceConfig) -> Result<ServiceRuntime, String> {
         if self.services.contains_key(&config.id) {

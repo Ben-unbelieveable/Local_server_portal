@@ -94,6 +94,10 @@ export default function TrayPopup() {
     fetchData();
   });
 
+  useTauriEvent("config-reloaded", () => {
+    fetchData();
+  });
+
   const handleStart = async (id: string) => {
     try {
       await api.startService(id);

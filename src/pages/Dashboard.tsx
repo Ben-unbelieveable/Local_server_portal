@@ -96,6 +96,10 @@ export default function Dashboard() {
     fetchData();
   });
 
+  useTauriEvent("config-reloaded", () => {
+    fetchData();
+  });
+
   const runningCount = services.filter((s) => s.status === "running").length;
   const stoppedCount = services.filter((s) => s.status === "stopped").length;
   const errorCount = services.filter(

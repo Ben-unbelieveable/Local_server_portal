@@ -72,6 +72,10 @@ export default function ResourceBar({
     fetchResources();
   });
 
+  useTauriEvent("config-reloaded", () => {
+    fetchResources();
+  });
+
   if (!resource) return null;
 
   /**
