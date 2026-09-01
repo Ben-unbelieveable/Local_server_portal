@@ -7,7 +7,8 @@
     "frontendDist": "../dist",
     "devUrl": "http://localhost:1420",
     "beforeDevCommand": "pnpm dev",
-    "beforeBuildCommand": "pnpm build"
+    "beforeBuildCommand": "pnpm build",
+    "beforeBundleCommand": "./src-tauri/macos-widget/build-widget.sh || true"
   },
   "app": {
     "withGlobalTauri": true,
@@ -37,7 +38,9 @@
   },
   "bundle": {
     "active": true,
-    "targets": ["app", "dmg"],
+    "targets": [
+      "app"
+    ],
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
@@ -46,7 +49,7 @@
       "icons/icon.ico"
     ],
     "macOS": {
-      "minimumSystemVersion": "10.15"
+      "minimumSystemVersion": "14.0"
     }
   }
 }

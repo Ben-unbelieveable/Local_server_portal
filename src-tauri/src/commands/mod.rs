@@ -7,7 +7,7 @@ use crate::services::network_info;
 use crate::services::preferences::{self, AppPreferences};
 use crate::services::resource_monitor::ResourceMonitor;
 use crate::services::service_manager::AppState;
-use crate::TRAY_IGNORE_SHOW_UNTIL_MS;
+use crate::TRAY_IGNORE_HIDE_UNTIL_MS;
 use std::sync::atomic::Ordering;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::{Manager, State};
@@ -238,47 +238,49 @@ pub async fn shutdown_all_services(state: State<'_, AppState>) -> Result<Vec<Bat
 
 // ==================== 托盘弹窗 Commands ====================
 
-/// toggle_tray_popup 的核心逻辑（同步），供 command 和 Rust 端 tray event 回调复用。
+/// 显示托盘弹窗（不关闭、不打开主窗）。菜单栏单击确认后调用。
 ///
-/// 将可见性切换与窗口定位逻辑提取为同步函数，避免在 tray 事件回调中
-/// 无法使用 async command 的限制。
+/// 输入：AppHandle
+/// 输出：成功 `Ok(())`；窗口未创建则 `Err`
+pub fn show_tray_popup_impl(app: &tauri::AppHandle) -> Result<(), String> {
+    let win = app
+        .get_webview_window("tray-popup")
+        .ok_or_else(|| "托盘弹窗窗口未创建".to_string())?;
+    if let Ok(Some(monitor)) = app.primary_monitor() {
+        let screen_size = monitor.size();
+        let scale = monitor.scale_factor();
+        let win_size = win
+            .outer_size()
+            .unwrap_or(tauri::PhysicalSize::new(380, 720));
+        let x = (screen_size.width as f64 / scale - win_size.width as f64 / scale - 16.0) as i32;
+        let y = 36i32;
+        let _ = win.set_position(tauri::PhysicalPosition::new(
+            (x as f64 * scale) as i32,
+            (y as f64 * scale) as i32,
+        ));
+    }
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_millis() as u64)
+        .unwrap_or(0);
+    TRAY_IGNORE_HIDE_UNTIL_MS.store(now.saturating_add(400), Ordering::SeqCst);
+    let _ = win.show();
+    let _ = win.set_focus();
+    Ok(())
+}
+
+/// 切换托盘弹窗显示/隐藏。
 ///
-/// 若弹窗刚因失焦被隐藏，短暂忽略「再次显示」，避免托盘点击与失焦竞态导致闪烁重开。
+/// 输入：AppHandle
+/// 输出：切换后是否可见
 pub fn toggle_tray_popup_impl(app: &tauri::AppHandle) -> Result<bool, String> {
     if let Some(win) = app.get_webview_window("tray-popup") {
-        let is_visible = win.is_visible().unwrap_or(false);
-        if is_visible {
+        if win.is_visible().unwrap_or(false) {
             let _ = win.hide();
-            Ok(false)
-        } else {
-            let now = SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .map(|d| d.as_millis() as u64)
-                .unwrap_or(0);
-            let ignore_until = TRAY_IGNORE_SHOW_UNTIL_MS.load(Ordering::SeqCst);
-            if now < ignore_until {
-                // 失焦隐藏后紧跟着的托盘点击：保持隐藏，视为用户意图关闭
-                return Ok(false);
-            }
-            // 定位到屏幕右上角（macOS menubar 下方）
-            if let Ok(Some(monitor)) = app.primary_monitor() {
-                let screen_size = monitor.size();
-                let scale = monitor.scale_factor();
-                let win_size = win
-                    .outer_size()
-                    .unwrap_or(tauri::PhysicalSize::new(380, 720));
-                let x =
-                    (screen_size.width as f64 / scale - win_size.width as f64 / scale - 16.0) as i32;
-                let y = 36i32; // menubar 高度
-                let _ = win.set_position(tauri::PhysicalPosition::new(
-                    (x as f64 * scale) as i32,
-                    (y as f64 * scale) as i32,
-                ));
-            }
-            let _ = win.show();
-            let _ = win.set_focus();
-            Ok(true)
+            return Ok(false);
         }
+        show_tray_popup_impl(app)?;
+        Ok(true)
     } else {
         Err("托盘弹窗窗口未创建".to_string())
     }
@@ -325,10 +327,8 @@ pub async fn show_main_window(app: tauri::AppHandle) -> Result<(), String> {
         let _ = app.set_activation_policy(tauri::ActivationPolicy::Regular);
     }
 
-    if let Some(main) = app.get_webview_window("main") {
-        let _ = main.show();
-        let _ = main.unminimize();
-        let _ = main.set_focus();
+    crate::reveal_main_window(&app);
+    if app.get_webview_window("main").is_some() {
         Ok(())
     } else {
         Err("主窗口未创建".to_string())

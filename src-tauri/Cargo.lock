@@ -2069,6 +2069,7 @@ dependencies = [
  "tauri-plugin-notification",
  "tauri-plugin-process",
  "tauri-plugin-shell",
+ "tauri-plugin-widgets",
  "thiserror 1.0.69",
  "tokio",
  "tracing",
@@ -3938,6 +3939,19 @@ dependencies = [
  "tauri-plugin",
  "thiserror 2.0.19",
  "tokio",
+]
+
+[[package]]
+name = "tauri-plugin-widgets"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "918ad3f2020c216aeeea4b609ce40ea24a066ee765b6099b7c139cf973ccab19"
+dependencies = [
+ "log",
+ "serde",
+ "serde_json",
+ "tauri",
+ "tauri-plugin",
 ]
 
 [[package]]

@@ -67,29 +67,42 @@ jobs:
         with:
           workspaces: ./src-tauri -> target
 
+      - name: Install xcodegen
+        run: brew install xcodegen
+
       - name: Install frontend dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Build DMG and publish GitHub Release
-        uses: tauri-apps/tauri-action@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build app bundle with widget extension
+        run: pnpm tauri build --target aarch64-apple-darwin
+
+      - name: Embed widget and rebuild DMG
+        run: ./src-tauri/macos-widget/embed-widget.sh
+
+      - name: Upload release asset
+        uses: softprops/action-gh-release@v2
         with:
-          tagName: ${{ github.ref_name }}
-          releaseName: LocalServiceManager ${{ github.ref_name }}
-          releaseBody: |
+          files: src-tauri/target/release/bundle/dmg/*.dmg
+          tag_name: ${{ github.ref_name }}
+          name: LocalServiceManager ${{ github.ref_name }}
+          body: |
             macOS Apple Silicon (aarch64) 安装包。
 
             ## 本版更新
+            - 支持 macOS 桌面小组件（3×3 布局，同托盘详情）
             - 主窗口与托盘详情页展示局域网 / 公网 IP，支持点击复制
             - 托盘详情页 CPU / 内存 / GPU 使用率单行三列展示
 
             ## 安装
             下载 `.dmg`，打开后将应用拖入「应用程序」文件夹。
 
+            ## 添加小组件
+            1. 将应用安装到「应用程序」
+            2. 启动应用一次
+            3. 桌面右键 → 编辑小组件 → 搜索 **ServicePilot**
+
             ## 说明
             - 若系统提示无法验证开发者，请右键应用 → **打开**
             - 本工具以菜单栏托盘为主；关闭主窗口后托盘继续运行
-          releaseDraft: false
-          prerelease: false
-          args: --target aarch64-apple-darwin --bundles dmg
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

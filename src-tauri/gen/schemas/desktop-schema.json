@@ -2803,6 +2803,156 @@
           "type": "string",
           "const": "shell:deny-stdin-write",
           "markdownDescription": "Denies the stdin_write command without any pre-configured scope."
+        },
+        {
+          "description": "Default permissions for the widgets plugin — enables all commands.\n#### This default permission set includes:\n\n- `allow-set-items`\n- `allow-get-items`\n- `allow-set-register-widget`\n- `allow-reload-all-timelines`\n- `allow-reload-timelines`\n- `allow-request-widget`\n- `allow-create-widget-window`\n- `allow-close-widget-window`\n- `allow-set-widget-config`\n- `allow-get-widget-config`\n- `allow-widget-action`\n- `allow-poll-pending-actions`",
+          "type": "string",
+          "const": "widgets:default",
+          "markdownDescription": "Default permissions for the widgets plugin — enables all commands.\n#### This default permission set includes:\n\n- `allow-set-items`\n- `allow-get-items`\n- `allow-set-register-widget`\n- `allow-reload-all-timelines`\n- `allow-reload-timelines`\n- `allow-request-widget`\n- `allow-create-widget-window`\n- `allow-close-widget-window`\n- `allow-set-widget-config`\n- `allow-get-widget-config`\n- `allow-widget-action`\n- `allow-poll-pending-actions`"
+        },
+        {
+          "description": "Enables the close_widget_window command without any pre-configured scope.",
+          "type": "string",
+          "const": "widgets:allow-close-widget-window",
+          "markdownDescription": "Enables the close_widget_window command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the create_widget_window command without any pre-configured scope.",
+          "type": "string",
+          "const": "widgets:allow-create-widget-window",
+          "markdownDescription": "Enables the create_widget_window command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the get_items command without any pre-configured scope.",
+          "type": "string",
+          "const": "widgets:allow-get-items",
+          "markdownDescription": "Enables the get_items command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the get_widget_config command without any pre-configured scope.",
+          "type": "string",
+          "const": "widgets:allow-get-widget-config",
+          "markdownDescription": "Enables the get_widget_config command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the poll_pending_actions command without any pre-configured scope.",
+          "type": "string",
+          "const": "widgets:allow-poll-pending-actions",
+          "markdownDescription": "Enables the poll_pending_actions command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the reload_all_timelines command without any pre-configured scope.",
+          "type": "string",
+          "const": "widgets:allow-reload-all-timelines",
+          "markdownDescription": "Enables the reload_all_timelines command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the reload_timelines command without any pre-configured scope.",
+          "type": "string",
+          "const": "widgets:allow-reload-timelines",
+          "markdownDescription": "Enables the reload_timelines command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the request_widget command without any pre-configured scope.",
+          "type": "string",
+          "const": "widgets:allow-request-widget",
+          "markdownDescription": "Enables the request_widget command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the set_items command without any pre-configured scope.",
+          "type": "string",
+          "const": "widgets:allow-set-items",
+          "markdownDescription": "Enables the set_items command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the set_register_widget command without any pre-configured scope.",
+          "type": "string",
+          "const": "widgets:allow-set-register-widget",
+          "markdownDescription": "Enables the set_register_widget command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the set_widget_config command without any pre-configured scope.",
+          "type": "string",
+          "const": "widgets:allow-set-widget-config",
+          "markdownDescription": "Enables the set_widget_config command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the widget_action command without any pre-configured scope.",
+          "type": "string",
+          "const": "widgets:allow-widget-action",
+          "markdownDescription": "Enables the widget_action command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the close_widget_window command without any pre-configured scope.",
+          "type": "string",
+          "const": "widgets:deny-close-widget-window",
+          "markdownDescription": "Denies the close_widget_window command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the create_widget_window command without any pre-configured scope.",
+          "type": "string",
+          "const": "widgets:deny-create-widget-window",
+          "markdownDescription": "Denies the create_widget_window command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the get_items command without any pre-configured scope.",
+          "type": "string",
+          "const": "widgets:deny-get-items",
+          "markdownDescription": "Denies the get_items command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the get_widget_config command without any pre-configured scope.",
+          "type": "string",
+          "const": "widgets:deny-get-widget-config",
+          "markdownDescription": "Denies the get_widget_config command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the poll_pending_actions command without any pre-configured scope.",
+          "type": "string",
+          "const": "widgets:deny-poll-pending-actions",
+          "markdownDescription": "Denies the poll_pending_actions command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the reload_all_timelines command without any pre-configured scope.",
+          "type": "string",
+          "const": "widgets:deny-reload-all-timelines",
+          "markdownDescription": "Denies the reload_all_timelines command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the reload_timelines command without any pre-configured scope.",
+          "type": "string",
+          "const": "widgets:deny-reload-timelines",
+          "markdownDescription": "Denies the reload_timelines command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the request_widget command without any pre-configured scope.",
+          "type": "string",
+          "const": "widgets:deny-request-widget",
+          "markdownDescription": "Denies the request_widget command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the set_items command without any pre-configured scope.",
+          "type": "string",
+          "const": "widgets:deny-set-items",
+          "markdownDescription": "Denies the set_items command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the set_register_widget command without any pre-configured scope.",
+          "type": "string",
+          "const": "widgets:deny-set-register-widget",
+          "markdownDescription": "Denies the set_register_widget command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the set_widget_config command without any pre-configured scope.",
+          "type": "string",
+          "const": "widgets:deny-set-widget-config",
+          "markdownDescription": "Denies the set_widget_config command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the widget_action command without any pre-configured scope.",
+          "type": "string",
+          "const": "widgets:deny-widget-action",
+          "markdownDescription": "Denies the widget_action command without any pre-configured scope."
         }
       ]
     },

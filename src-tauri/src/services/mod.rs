@@ -5,3 +5,4 @@ pub mod network_info;
 pub mod preferences;
 pub mod resource_monitor;
 pub mod service_manager;
+pub mod widget_sync;
