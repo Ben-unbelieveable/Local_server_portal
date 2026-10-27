@@ -9,7 +9,7 @@ pub struct ServiceConfig {
     pub command: String,
     #[serde(default)]
     pub url: Option<String>,
-    /// 端口：用于存活检测（启动脚本进程退出后，端口仍能反映服务的真实状态）。
+    /// 兼容旧配置：未提供访问地址时用于存活检测；有地址时自动解析其端口。
     #[serde(default)]
     pub port: Option<u16>,
     #[serde(default)]
@@ -26,6 +26,74 @@ pub struct ServiceConfig {
 
 fn default_stop_timeout() -> u64 {
     10
+}
+
+impl ServiceConfig {
+    /// 从本机 HTTP(S) 访问地址解析监控端口；无地址时兼容旧 port 配置。
+    /// 远端地址不用于本机 PID 探测，避免接管本机同端口的其他进程。
+    pub fn monitoring_port(&self) -> Option<u16> {
+        match self.url.as_deref().filter(|url| !url.trim().is_empty()) {
+            Some(url) => {
+                let url = tauri::Url::parse(url.trim()).ok()?;
+                if !matches!(url.scheme(), "http" | "https") {
+                    return None;
+                }
+                let host = url.host_str()?;
+                let local = host.eq_ignore_ascii_case("localhost")
+                    || host
+                        .trim_matches(['[', ']'])
+                        .parse::<std::net::IpAddr>()
+                        .map(|ip| {
+                            ip.is_loopback()
+                                || ip.is_unspecified()
+                                || if_addrs::get_if_addrs()
+                                    .unwrap_or_default()
+                                    .iter()
+                                    .any(|iface| iface.ip() == ip)
+                        })
+                        .unwrap_or(false);
+                if local {
+                    url.port_or_known_default().filter(|port| *port != 0)
+                } else {
+                    None
+                }
+            }
+            None => self.port,
+        }
+    }
+}
+
+#[cfg(test)]
+mod service_monitoring_tests {
+    use super::ServiceConfig;
+
+    #[test]
+    fn monitoring_port_uses_local_url_and_preserves_legacy_configs() {
+        let mut config: ServiceConfig = serde_json::from_value(serde_json::json!({
+            "id": "test", "name": "test", "command": "test", "port": 9000
+        })).unwrap();
+        assert_eq!(config.monitoring_port(), Some(9000));
+        for (url, expected) in [
+            ("http://127.0.0.1:8091/", Some(8091)),
+            ("http://localhost:8091/index.html?test=1#top", Some(8091)),
+            ("http://[::1]:8091/", Some(8091)),
+            ("http://0.0.0.0:8091/", Some(8091)),
+            ("https://localhost:443/", Some(443)),
+            ("http://localhost/", Some(80)),
+            ("https://example.com:8091/", None),
+            ("file:///tmp/test.html", None),
+            ("invalid", None),
+            ("http://localhost:0/", None),
+        ] {
+            config.url = Some(url.to_owned());
+            assert_eq!(config.monitoring_port(), expected, "{url}");
+        }
+        config.port = None;
+        config.url = Some(" http://127.0.0.1:8091/ ".to_owned());
+        assert_eq!(config.monitoring_port(), Some(8091));
+        config.url = None;
+        assert_eq!(config.monitoring_port(), None);
+    }
 }
 
 /// 服务运行状态
@@ -152,10 +220,59 @@ pub struct ServiceResource {
     pub uptime_secs: u64,
 }
 
-/// 应用配置（config.yaml 的顶层结构）
+/// 常用入口只描述访问目标，不参与服务进程管理。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ShortcutConfig {
+    pub id: String,
+    pub name: String,
+    pub url: String,
+    #[serde(default)]
+    pub group: Option<String>,
+    #[serde(default)]
+    pub description: Option<String>,
+}
+
+impl ShortcutConfig {
+    /// 输入入口字段，校验名称和可访问的页面 URL；非法协议或非 HTML 文件返回说明。
+    pub fn validate(&self) -> Result<(), String> {
+        if self.id.trim().is_empty() || self.name.trim().is_empty() {
+            return Err("入口 ID 和名称不能为空".to_string());
+        }
+        let url =
+            tauri::Url::parse(&self.url).map_err(|_| "请输入完整的有效访问地址".to_string())?;
+        let address = self.url.to_ascii_lowercase();
+        match url.scheme() {
+            "http" | "https"
+                if url.host_str().is_some()
+                    && (address.starts_with("http://") || address.starts_with("https://")) =>
+            {
+                Ok(())
+            }
+            "file" if address.starts_with("file:///") => {
+                let path = url
+                    .to_file_path()
+                    .map_err(|_| "请使用本机 HTML 文件地址".to_string())?;
+                let extension = path.extension().and_then(|s| s.to_str()).unwrap_or("");
+                if (extension.eq_ignore_ascii_case("html") || extension.eq_ignore_ascii_case("htm"))
+                    && (url.path().to_ascii_lowercase().ends_with(".html")
+                        || url.path().to_ascii_lowercase().ends_with(".htm"))
+                {
+                    Ok(())
+                } else {
+                    Err("本地页面仅支持 .html 或 .htm 文件".to_string())
+                }
+            }
+            _ => Err("仅支持 http://、https:// 和本地 HTML 的 file:/// 地址".to_string()),
+        }
+    }
+}
+
+/// 服务及常用入口共享的 YAML 配置；旧文件缺省为空入口列表。
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppConfig {
     pub services: Vec<ServiceConfig>,
+    #[serde(default)]
+    pub shortcuts: Vec<ShortcutConfig>,
 }
 
 /// 批量操作结果

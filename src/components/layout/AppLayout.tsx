@@ -2,6 +2,7 @@ import { Layout, Menu, Switch, Typography, theme, Grid } from "antd";
 import {
   DashboardOutlined,
   ToolOutlined,
+  LinkOutlined,
   FileTextOutlined,
   SettingOutlined,
   SunOutlined,
@@ -31,6 +32,7 @@ interface Props {
 const menuItems = [
   { key: "/", icon: <DashboardOutlined />, label: "仪表盘" },
   { key: "/services", icon: <ToolOutlined />, label: "服务管理" },
+  { key: "/shortcuts", icon: <LinkOutlined />, label: "常用入口" },
   { key: "/logs", icon: <FileTextOutlined />, label: "日志" },
   { key: "/settings", icon: <SettingOutlined />, label: "配置" },
 ];

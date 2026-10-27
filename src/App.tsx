@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import AppLayout from "./components/layout/AppLayout";
 import Dashboard from "./pages/Dashboard";
 import Services from "./pages/Services";
+import Shortcuts from "./pages/Shortcuts";
 import Logs from "./pages/Logs";
 import Settings from "./pages/Settings";
 import TrayPopup from "./pages/TrayPopup";
@@ -67,6 +68,7 @@ export default function App() {
           <Routes>
             <Route path="/" element={<Dashboard />} />
             <Route path="/services" element={<Services />} />
+            <Route path="/shortcuts" element={<Shortcuts />} />
             <Route path="/logs" element={<Logs />} />
             <Route path="/logs/:serviceId" element={<Logs />} />
             <Route path="/settings" element={<Settings />} />

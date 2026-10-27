@@ -2,7 +2,7 @@ import WidgetKit
 import SwiftUI
 import AppIntents
 
-/// 主应用写入的资源/服务快照
+/// 主应用写入的资源、服务和常用入口快照；新增字段可缺省以兼容旧快照。
 struct WidgetSnapshot: Codable {
     var cpu: Double
     var memory: Double
@@ -12,16 +12,19 @@ struct WidgetSnapshot: Codable {
     var running: Int
     var total: Int
     var services: [WidgetServiceItem]
+    var shortcuts: [WidgetShortcutItem]?
+    var shortcutTotal: Int?
 
     enum CodingKeys: String, CodingKey {
-        case cpu, memory, gpu, lan, running, total, services
+        case cpu, memory, gpu, lan, running, total, services, shortcuts
         case publicIp = "public_ip"
+        case shortcutTotal = "shortcut_total"
     }
 
     static let empty = WidgetSnapshot(
         cpu: 0, memory: 0, gpu: nil,
         lan: "—", publicIp: "—",
-        running: 0, total: 0, services: []
+        running: 0, total: 0, services: [], shortcuts: [], shortcutTotal: 0
     )
 }
 
@@ -30,6 +33,13 @@ struct WidgetServiceItem: Codable {
     var name: String
     var status: String
     var url: String?
+}
+
+/// 常用入口只有访问目标，不参与服务起停。
+struct WidgetShortcutItem: Codable {
+    var id: String
+    var name: String
+    var url: String
 }
 
 struct SnapshotEntry: TimelineEntry {
@@ -72,7 +82,7 @@ private enum ResourceTint {
     static let gpu = Color(red: 0.56, green: 0.37, blue: 0.89)
 }
 
-/// 大号小组件：无标题；资源三卡；网络+运行计数一行；服务竖排。
+/// 大号小组件：资源三卡、网络与计数，以及共享行数预算的服务和常用入口。
 /// WidgetKit 不支持 ScrollView / 悬停滚动，超出部分以「还有 N 个」收束。
 struct ServicePilotWidgetView: View {
     var entry: SnapshotEntry
@@ -82,11 +92,18 @@ struct ServicePilotWidgetView: View {
 
     var body: some View {
         let snap = entry.snapshot
+        let shortcuts = snap.shortcuts ?? []
+        let limits = rowLimits(snap)
         VStack(alignment: .leading, spacing: 10) {
             metricsRow(snap)
             summaryRow(snap)
             Divider().opacity(0.4)
-            serviceSection(snap)
+            if snap.total > 0 || shortcuts.isEmpty {
+                serviceSection(snap, rowLimit: limits.services)
+            }
+            if !shortcuts.isEmpty {
+                shortcutSection(snap, rowLimit: limits.shortcuts)
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .containerBackground(.background, for: .widget)
@@ -184,9 +201,19 @@ struct ServicePilotWidgetView: View {
 
     // MARK: 服务竖排
 
-    private func serviceSection(_ snap: WidgetSnapshot) -> some View {
-        let overflow = snap.total > maxServiceRows
-        let limit = overflow ? maxServiceRows - 1 : maxServiceRows
+    /// 输入快照；输出服务和入口的行数预算，为入口标题及两类溢出说明留足空间。
+    private func rowLimits(_ snap: WidgetSnapshot) -> (services: Int, shortcuts: Int) {
+        let count = snap.shortcutTotal ?? snap.shortcuts?.count ?? 0
+        guard count > 0 else { return (maxServiceRows, 0) }
+        let available = maxServiceRows - 1
+        let shortcutRows = min(count, max(3, available - min(snap.total, 3)))
+        return (min(snap.total, available - shortcutRows), shortcutRows)
+    }
+
+    /// 输入快照和行数上限；输出服务列表，溢出提示也计入上限。
+    private func serviceSection(_ snap: WidgetSnapshot, rowLimit: Int) -> some View {
+        let overflow = snap.total > rowLimit
+        let limit = overflow ? max(rowLimit - 1, 0) : rowLimit
         let shown = Array(snap.services.prefix(limit))
         let rest = max(snap.total - shown.count, 0)
 
@@ -208,14 +235,46 @@ struct ServicePilotWidgetView: View {
                 }
             }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .frame(maxWidth: .infinity, alignment: .topLeading)
+    }
+
+    /// 输入快照和行数上限；输出独立于运行状态的常用入口按钮及溢出计数。
+    private func shortcutSection(_ snap: WidgetSnapshot, rowLimit: Int) -> some View {
+        let shortcuts = snap.shortcuts ?? []
+        let total = snap.shortcutTotal ?? shortcuts.count
+        let overflow = total > rowLimit
+        let shown = Array(shortcuts.prefix(overflow ? max(rowLimit - 1, 0) : rowLimit))
+        return VStack(alignment: .leading, spacing: 3) {
+            Text("常用入口")
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(.secondary)
+            ForEach(shown, id: \.id) { shortcut in
+                Button(intent: OpenShortcutIntent(shortcutId: shortcut.id)) {
+                    HStack(spacing: 6) {
+                        Image(systemName: shortcut.url.hasPrefix("file:") ? "doc.text" : "link")
+                        Text(shortcut.name).lineLimit(1)
+                        Spacer(minLength: 4)
+                        Image(systemName: "arrow.up.right.circle.fill")
+                    }
+                    .font(.caption)
+                    .foregroundStyle(Color.blue)
+                    .padding(.vertical, 3)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("访问 \(shortcut.name)")
+            }
+            if overflow {
+                Text("还有 \(total - shown.count) 个入口")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+        }
     }
 
     private func serviceRow(_ svc: WidgetServiceItem) -> some View {
         let running = svc.status == "running"
         let starting = svc.status == "starting"
         let canStop = running || starting
-        let visit = running ? visitURL(svc.url) : nil
         return HStack(spacing: 6) {
             Circle()
                 .fill(statusTint(svc.status))
@@ -240,13 +299,15 @@ struct ServicePilotWidgetView: View {
                 .buttonStyle(.plain)
                 .accessibilityLabel(canStop ? "停止 \(svc.name)" : "启动 \(svc.name)")
             }
-            if let visit {
-                Link(destination: visit) {
+            if running, let id = svc.id, !id.isEmpty,
+               let url = svc.url, !url.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                Button(intent: OpenServiceIntent(serviceId: id)) {
                     Image(systemName: "arrow.up.right.circle.fill")
                         .font(.body)
                         .foregroundStyle(Color.blue)
                         .symbolRenderingMode(.hierarchical)
                 }
+                .buttonStyle(.plain)
                 .accessibilityLabel("访问 \(svc.name)")
             }
         }
@@ -254,15 +315,6 @@ struct ServicePilotWidgetView: View {
         .invalidatableContent()
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(svc.name) \(statusLabel(svc.status))")
-    }
-
-    /// 输入：配置中的 url；输出：可打开的 http(s) URL，缺 scheme 时补 http。
-    private func visitURL(_ raw: String?) -> URL? {
-        guard let raw, !raw.isEmpty else { return nil }
-        if let url = URL(string: raw), url.scheme != nil {
-            return url
-        }
-        return URL(string: "http://\(raw)")
     }
 
     private func statusTint(_ status: String) -> Color {
@@ -294,19 +346,19 @@ struct MyWidget: Widget {
             ServicePilotWidgetView(entry: entry)
         }
         .configurationDisplayName("ServicePilot")
-        .description("查看本机资源、网络与服务状态")
+        .description("查看本机资源、服务状态并访问常用入口")
         .supportedFamilies([.systemLarge])
     }
 }
 
-/// 将起停请求写入扩展容器，供主应用拾取执行。
+/// 将起停或快捷访问请求写入扩展容器，供主应用拾取执行。
 enum WidgetActionBridge {
-    /// 输入：服务 id、start/stop；输出：写入 `widget_action.json`，失败静默忽略。
-    static func enqueue(serviceId: String, action: String) {
+    /// 输入对象 ID 和动作；原子写入待处理请求，失败不覆盖已有请求。
+    static func enqueue(id: String, action: String) {
         let url = URL(fileURLWithPath: NSHomeDirectory())
             .appendingPathComponent("widget_action.json")
         let payload: [String: String] = [
-            "id": serviceId,
+            "id": id,
             "action": action,
         ]
         guard let data = try? JSONSerialization.data(withJSONObject: payload) else { return }
@@ -339,7 +391,47 @@ struct ToggleServiceIntent: AppIntent {
 
     /// 输入：intent 参数；输出：写入待处理动作后立即返回。
     func perform() async throws -> some IntentResult {
-        WidgetActionBridge.enqueue(serviceId: serviceId, action: action)
+        WidgetActionBridge.enqueue(id: serviceId, action: action)
+        return .result()
+    }
+}
+
+/// 输入入口 ID；请求已在后台运行的主应用校验并打开目标，兼容本地 HTML。
+struct OpenShortcutIntent: AppIntent {
+    static var title: LocalizedStringResource = "访问常用入口"
+    static var openAppWhenRun = false
+    static var isDiscoverable = false
+
+    @Parameter(title: "入口")
+    var shortcutId: String
+
+    init() { shortcutId = "" }
+
+    init(shortcutId: String) { self.shortcutId = shortcutId }
+
+    /// 输入入口参数；仅传递 ID，具体 URL 从主应用当前配置读取。
+    func perform() async throws -> some IntentResult {
+        WidgetActionBridge.enqueue(id: shortcutId, action: "open_shortcut")
+        return .result()
+    }
+}
+
+/// 输入服务 ID；由主应用读取当前配置并在默认浏览器中打开服务地址。
+struct OpenServiceIntent: AppIntent {
+    static var title: LocalizedStringResource = "访问服务"
+    static var openAppWhenRun = false
+    static var isDiscoverable = false
+
+    @Parameter(title: "服务")
+    var serviceId: String
+
+    init() { serviceId = "" }
+
+    init(serviceId: String) { self.serviceId = serviceId }
+
+    /// 仅传服务 ID，不启动或停止服务；目标 URL 由主应用校验。
+    func perform() async throws -> some IntentResult {
+        WidgetActionBridge.enqueue(id: serviceId, action: "open_service")
         return .result()
     }
 }

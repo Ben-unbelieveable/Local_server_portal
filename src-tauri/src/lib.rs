@@ -118,7 +118,7 @@ pub fn run() {
                         mgr.check_process_alive();
                     }
 
-                    // macOS 桌面小组件：同步快照；拾取小组件起停请求
+                    // macOS 桌面小组件：同步服务和入口；拾取起停及快捷访问请求
                     #[cfg(target_os = "macos")]
                     {
                         if let Some(action) = widget_sync::take_pending_action() {
@@ -127,29 +127,47 @@ pub fn run() {
                             tauri::async_runtime::spawn(async move {
                                 {
                                     let mut m = mgr.lock().await;
-                                    let _ = match action.action.as_str() {
+                                    let result = match action.action.as_str() {
                                         "stop" => m.stop_service(&action.id).await,
-                                        _ => m.start_service(&action.id).await,
+                                        "start" => m.start_service(&action.id).await,
+                                        "open_shortcut" => widget_sync::open_shortcut(
+                                            &handle,
+                                            &m.get_shortcuts(),
+                                            &action.id,
+                                        ),
+                                        "open_service" => widget_sync::open_service(
+                                            &handle,
+                                            &m.get_services(),
+                                            &action.id,
+                                        ),
+                                        _ => Err("未知的小组件动作".to_string()),
                                     };
+                                    if let Err(error) = result {
+                                        tracing::warn!("小组件动作 {} 失败: {}", action.action, error);
+                                    }
                                 }
-                                let (res, services) = {
+                                let (res, services, shortcuts) = {
                                     let m = mgr.lock().await;
                                     (
                                         ResourceMonitor::get_system_resources(),
                                         m.get_services(),
+                                        m.get_shortcuts(),
                                     )
                                 };
-                                widget_sync::push_snapshot_now(&handle, &res, &services);
+                                widget_sync::push_snapshot_now(
+                                    &handle, &res, &services, &shortcuts,
+                                );
                             });
                         }
-                        let services_snapshot = {
+                        let (services_snapshot, shortcuts_snapshot) = {
                             let mgr = manager_monitor.lock().await;
-                            mgr.get_services()
+                            (mgr.get_services(), mgr.get_shortcuts())
                         };
                         widget_sync::push_snapshot(
                             &app_handle_monitor,
                             &sys_res,
                             &services_snapshot,
+                            &shortcuts_snapshot,
                         );
                     }
 
@@ -328,6 +346,10 @@ pub fn run() {
             commands::get_services,
             commands::add_service,
             commands::update_service,
+            commands::get_shortcuts,
+            commands::add_shortcut,
+            commands::update_shortcut,
+            commands::remove_shortcut,
             commands::remove_service,
             commands::start_service,
             commands::stop_service,

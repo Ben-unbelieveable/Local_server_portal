@@ -7,7 +7,7 @@
 
 use crate::models::{
     BatchResult, LogEntry, NetworkInfo, ResourceHistoryPoint, ServiceConfig, ServiceResource,
-    ServiceRuntime, SystemResource,
+    ServiceRuntime, SystemResource, ShortcutConfig,
 };
 use crate::services::config_manager;
 use crate::services::network_info;
@@ -71,6 +71,63 @@ async fn health() -> impl IntoResponse {
 async fn get_services(State(mgr): State<SharedManager>) -> Result<Json<Vec<ServiceRuntime>>, Response> {
     let manager = mgr.lock().await;
     Ok(Json(manager.get_services()))
+}
+
+/// 输入管理器错误；将入口不存在、持久化失败和字段错误映射为契约规定的状态码。
+fn shortcut_error(message: String) -> Response {
+    let status = if message.ends_with("不存在") {
+        StatusCode::NOT_FOUND
+    } else if ["无法创建配置目录:", "序列化配置失败:", "写入配置文件失败:"]
+        .iter()
+        .any(|prefix| message.starts_with(prefix))
+    {
+        StatusCode::INTERNAL_SERVER_ERROR
+    } else {
+        StatusCode::BAD_REQUEST
+    };
+    err_response(status, message)
+}
+
+/// 无请求体；返回与桌面窗口共享的常用入口数组。
+async fn get_shortcuts(State(mgr): State<SharedManager>) -> Json<Vec<ShortcutConfig>> {
+    Json(mgr.lock().await.get_shortcuts())
+}
+
+/// 输入入口 JSON；持久化新增入口并返回对象，失败返回说明。
+async fn add_shortcut(
+    State(mgr): State<SharedManager>,
+    Json(config): Json<ShortcutConfig>,
+) -> Result<Json<ShortcutConfig>, Response> {
+    mgr.lock()
+        .await
+        .add_shortcut(config)
+        .map(Json)
+        .map_err(shortcut_error)
+}
+
+/// 输入路径 ID 和入口 JSON；持久化更新并返回对象。
+async fn update_shortcut(
+    State(mgr): State<SharedManager>,
+    Path(id): Path<String>,
+    Json(config): Json<ShortcutConfig>,
+) -> Result<Json<ShortcutConfig>, Response> {
+    mgr.lock()
+        .await
+        .update_shortcut(&id, config)
+        .map(Json)
+        .map_err(shortcut_error)
+}
+
+/// 输入路径 ID；删除成功返回 204，不操作入口目标。
+async fn remove_shortcut(
+    State(mgr): State<SharedManager>,
+    Path(id): Path<String>,
+) -> Result<StatusCode, Response> {
+    mgr.lock()
+        .await
+        .remove_shortcut(&id)
+        .map(|_| StatusCode::NO_CONTENT)
+        .map_err(shortcut_error)
 }
 
 async fn add_service(
@@ -301,6 +358,11 @@ async fn shutdown_all(State(mgr): State<SharedManager>) -> Json<Vec<BatchResult>
 fn build_router(manager: SharedManager) -> Router {
     Router::new()
         .route("/api/health", get(health))
+        .route("/api/shortcuts", get(get_shortcuts).post(add_shortcut))
+        .route(
+            "/api/shortcuts/{id}",
+            put(update_shortcut).delete(remove_shortcut),
+        )
         .route("/api/services", get(get_services).post(add_service))
         .route(
             "/api/services/{id}",

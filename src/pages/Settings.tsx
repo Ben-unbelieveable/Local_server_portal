@@ -331,4 +331,17 @@ services:
     group: AI模型
     description: Ollama 大模型推理服务（高资源消耗）
     stop_timeout: 15
+
+# 常用入口只保存访问地址，无需启动命令
+shortcuts:
+  - id: github
+    name: GitHub
+    url: https://github.com
+    group: 开发工具
+    description: 代码托管
+
+  - id: local-console
+    name: 本地控制台
+    url: http://localhost:8080
+    group: 本地页面
 `;

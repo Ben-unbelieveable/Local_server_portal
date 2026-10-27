@@ -40,6 +40,8 @@ import {
 import StatusTag from "../components/common/StatusTag";
 import ServiceNameLink from "../components/common/ServiceNameLink";
 import ResourceHistoryChart from "../components/common/ResourceHistoryChart";
+import ShortcutLink from "../components/common/ShortcutLink";
+import type { ShortcutConfig } from "../types";
 
 const { useBreakpoint } = Grid;
 
@@ -47,6 +49,7 @@ export default function Dashboard() {
   const navigate = useNavigate();
   const screens = useBreakpoint();
   const [services, setServices] = useState<ServiceRuntime[]>([]);
+  const [shortcuts, setShortcuts] = useState<ShortcutConfig[]>([]);
   const [resource, setResource] = useState<SystemResource | null>(null);
   const [history, setHistory] = useState<ResourceHistoryPoint[]>([]);
   const [svcResources, setSvcResources] = useState<ServiceResource[]>([]);
@@ -55,6 +58,8 @@ export default function Dashboard() {
   const chartHeight = screens.md ? 110 : 88;
 
   const fetchData = useCallback(async () => {
+    // 入口独立加载，避免读取失败影响现有资源仪表盘。
+    api.getShortcuts().then(setShortcuts).catch(() => {});
     try {
       const [svc, res, svcRes, hist] = await Promise.all([
         api.getServices(),
@@ -76,6 +81,10 @@ export default function Dashboard() {
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  useTauriEvent("shortcuts-changed", () => {
+    api.getShortcuts().then(setShortcuts).catch(() => {});
+  });
 
   // 浏览器预览无 Tauri 事件，轮询本机 HTTP 桥以与主窗/托盘同步
   useEffect(() => {
@@ -228,22 +237,27 @@ export default function Dashboard() {
     );
   }
 
-  if (services.length === 0) {
-    return (
-      <Empty description="还没有服务" style={{ marginTop: 80 }}>
-        <Button
-          type="primary"
-          icon={<PlusOutlined />}
-          onClick={() => navigate("/services")}
-        >
-          添加第一个服务
-        </Button>
-      </Empty>
-    );
-  }
-
   return (
     <div style={{ minWidth: 0 }}>
+      <Card
+        title="常用入口"
+        size="small"
+        style={{ marginBottom: spacing.lg }}
+        extra={<Button type="link" onClick={() => navigate("/shortcuts")}>管理入口</Button>}
+      >
+        {shortcuts.length ? (
+          <div style={{ display: "flex", flexWrap: "wrap", gap: spacing.md }}>
+            {shortcuts.slice(0, 8).map((shortcut) => (
+              <ShortcutLink key={shortcut.id} shortcut={shortcut} />
+            ))}
+            {shortcuts.length > 8 && (
+              <Button size="small" type="link" onClick={() => navigate("/shortcuts")}>查看全部 ({shortcuts.length})</Button>
+            )}
+          </div>
+        ) : (
+          <Typography.Text type="secondary">添加常用网站或本地页面，随时快捷访问。</Typography.Text>
+        )}
+      </Card>
       {/* 资源历史曲线：随断点 4 / 2 / 1 列自适应 */}
       <Row gutter={[spacing.lg, spacing.lg]} style={{ display: "flex", alignItems: "stretch" }}>
         <Col xs={24} md={12} xl={6} style={{ display: "flex" }}>
@@ -330,6 +344,15 @@ export default function Dashboard() {
               columns={columns}
               rowKey={(r) => r.config.id}
               pagination={false}
+              locale={{
+                emptyText: (
+                  <Empty description="还没有服务">
+                    <Button type="primary" icon={<PlusOutlined />} onClick={() => navigate("/services")}>
+                      添加第一个服务
+                    </Button>
+                  </Empty>
+                ),
+              }}
               size="small"
               scroll={{ x: 560 }}
               rowClassName={(record) => {

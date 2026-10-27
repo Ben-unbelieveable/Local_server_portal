@@ -8,6 +8,7 @@ import type {
   BatchResult,
   AppPreferences,
   NetworkInfo,
+  ShortcutConfig,
 } from "../types";
 
 // ==================== 环境检测 ====================
@@ -55,6 +56,10 @@ async function bridgeFetch<T>(path: string, init?: RequestInit): Promise<T> {
 
 /** API 方法集合形状（Tauri invoke / HTTP 桥共用） */
 type AppApi = {
+  getShortcuts: () => Promise<ShortcutConfig[]>;
+  addShortcut: (config: ShortcutConfig) => Promise<ShortcutConfig>;
+  updateShortcut: (id: string, config: ShortcutConfig) => Promise<ShortcutConfig>;
+  removeShortcut: (id: string) => Promise<void>;
   getServices: () => Promise<ServiceRuntime[]>;
   addService: (config: ServiceConfig) => Promise<ServiceRuntime>;
   updateService: (id: string, config: ServiceConfig) => Promise<ServiceRuntime>;
@@ -86,6 +91,19 @@ type AppApi = {
  * 不再使用硬编码假服务列表。
  */
 const bridgeApi: AppApi = {
+  getShortcuts: () => bridgeFetch<ShortcutConfig[]>("/api/shortcuts"),
+  addShortcut: (config) =>
+    bridgeFetch<ShortcutConfig>("/api/shortcuts", {
+      method: "POST",
+      body: JSON.stringify(config),
+    }),
+  updateShortcut: (id, config) =>
+    bridgeFetch<ShortcutConfig>(`/api/shortcuts/${encodeURIComponent(id)}`, {
+      method: "PUT",
+      body: JSON.stringify(config),
+    }),
+  removeShortcut: (id) =>
+    bridgeFetch<void>(`/api/shortcuts/${encodeURIComponent(id)}`, { method: "DELETE" }),
   getServices: () => bridgeFetch<ServiceRuntime[]>("/api/services"),
   addService: (config) =>
     bridgeFetch<ServiceRuntime>("/api/services", {
@@ -180,6 +198,11 @@ let _realApiPromise: Promise<AppApi> | null = null;
 async function loadRealApi(): Promise<AppApi> {
   const { invoke } = await import("@tauri-apps/api/core");
   return {
+    getShortcuts: () => invoke<ShortcutConfig[]>("get_shortcuts"),
+    addShortcut: (config) => invoke<ShortcutConfig>("add_shortcut", { config }),
+    updateShortcut: (id, config) =>
+      invoke<ShortcutConfig>("update_shortcut", { id, config }),
+    removeShortcut: (id) => invoke<void>("remove_shortcut", { id }),
     getServices: () => invoke<ServiceRuntime[]>("get_services"),
     addService: (config: ServiceConfig) =>
       invoke<ServiceRuntime>("add_service", { config }),

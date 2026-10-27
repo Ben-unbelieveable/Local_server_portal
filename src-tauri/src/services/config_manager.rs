@@ -60,6 +60,7 @@ pub fn load_config() -> Result<AppConfig, String> {
                     stop_timeout: 10,
                 }
             ],
+            shortcuts: vec![],
         };
         save_config(&default_config)?;
         return Ok(default_config);
@@ -69,11 +70,13 @@ pub fn load_config() -> Result<AppConfig, String> {
         .map_err(|e| format!("读取配置文件失败: {}", e))?;
 
     if content.trim().is_empty() {
-        return Ok(AppConfig { services: vec![] });
+        return Ok(AppConfig {
+            services: vec![],
+            shortcuts: vec![],
+        });
     }
 
-    serde_yaml::from_str(&content)
-        .map_err(|e| format!("配置文件格式错误: {}", e))
+    validate_yaml(&content)
 }
 
 /// 保存配置
@@ -89,6 +92,74 @@ pub fn save_config(config: &AppConfig) -> Result<(), String> {
 
 /// 校验 YAML 内容格式
 pub fn validate_yaml(content: &str) -> Result<AppConfig, String> {
-    serde_yaml::from_str::<AppConfig>(content)
-        .map_err(|e| format!("YAML 格式错误: {}", e))
+    let config =
+        serde_yaml::from_str::<AppConfig>(content).map_err(|e| format!("YAML 格式错误: {}", e))?;
+    let mut ids = std::collections::HashSet::new();
+    for shortcut in &config.shortcuts {
+        shortcut.validate()?;
+        if !ids.insert(&shortcut.id) {
+            return Err(format!("入口 ID '{}' 已存在，请更换", shortcut.id));
+        }
+    }
+    Ok(config)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::validate_yaml;
+
+    /// 输入旧版 YAML；断言无入口字段时仍保留已有服务并默认空入口。
+    #[test]
+    fn legacy_config_keeps_services() {
+        let config =
+            validate_yaml("services:\n  - id: api\n    name: API\n    command: echo hello\n")
+                .unwrap();
+        assert_eq!(config.services.len(), 1);
+        assert!(config.shortcuts.is_empty());
+    }
+
+    /// 输入仅含页面入口的配置；往返序列化后验证入口和 URL 不丢失。
+    #[test]
+    fn shortcuts_round_trip_without_commands() {
+        let yaml = "services: []\nshortcuts:\n  - id: docs\n    name: 文档\n    url: http://localhost:3000/docs?q=1#top\n    group: 开发\n  - id: page\n    name: 页面\n    url: file:///tmp/index.html\n";
+        let config = validate_yaml(yaml).unwrap();
+        let saved = serde_yaml::to_string(&config).unwrap();
+        let reloaded = validate_yaml(&saved).unwrap();
+        assert!(reloaded.services.is_empty());
+        assert_eq!(reloaded.shortcuts.len(), 2);
+        assert_eq!(
+            reloaded.shortcuts[0].url,
+            "http://localhost:3000/docs?q=1#top"
+        );
+        assert_eq!(reloaded.shortcuts[1].url, "file:///tmp/index.html");
+    }
+
+    /// 输入恶意/损坏页面地址；验证 YAML 编辑不能绕过页面协议和文件类型约束。
+    #[test]
+    fn invalid_shortcuts_are_rejected() {
+        for url in [
+            "javascript:alert(1)",
+            "data:text/html,test",
+            "ftp://example.com",
+            "https://",
+            "https:example.com",
+            "file:///tmp/run.sh",
+            "file:///tmp/index.html.exe",
+            "file:///tmp/index%2ehtml",
+            "file://server/share/index.html",
+        ] {
+            let yaml = format!(
+                "services: []\nshortcuts:\n  - id: test\n    name: Test\n    url: '{}'\n",
+                url
+            );
+            assert!(validate_yaml(&yaml).is_err(), "unexpected URL: {}", url);
+        }
+        assert!(validate_yaml("services: []\nshortcuts:\n  - id: test\n    name: '  '\n    url: https://example.com\n").is_err());
+    }
+
+    /// 输入重复 ID；验证配置编辑不会形成无法唯一更新和删除的入口。
+    #[test]
+    fn duplicate_shortcut_ids_are_rejected() {
+        assert!(validate_yaml("services: []\nshortcuts:\n  - id: docs\n    name: One\n    url: https://example.com\n  - id: docs\n    name: Two\n    url: http://localhost:3000\n").is_err());
+    }
 }

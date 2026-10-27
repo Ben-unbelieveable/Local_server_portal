@@ -20,6 +20,15 @@ export interface ServiceConfig {
   stop_timeout: number;
 }
 
+/** 只保存访问地址的常用入口，不要求启动命令或服务运行状态。 */
+export interface ShortcutConfig {
+  id: string;
+  name: string;
+  url: string;
+  group?: string | null;
+  description?: string | null;
+}
+
 export type ServiceStatus =
   | "stopped"
   | "starting"

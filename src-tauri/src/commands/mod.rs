@@ -1,6 +1,6 @@
 use crate::models::{
     BatchResult, LogEntry, NetworkInfo, ResourceHistoryPoint, ServiceConfig, ServiceResource,
-    ServiceRuntime, SystemResource,
+    ServiceRuntime, SystemResource, ShortcutConfig,
 };
 use crate::services::config_manager;
 use crate::services::network_info;
@@ -13,6 +13,37 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::{Manager, State};
 
 // ==================== 服务管理 Commands ====================
+
+/// 无输入；从共享管理器读取全部常用入口。
+#[tauri::command]
+pub async fn get_shortcuts(state: State<'_, AppState>) -> Result<Vec<ShortcutConfig>, String> {
+    Ok(state.manager.lock().await.get_shortcuts())
+}
+
+/// 输入完整入口；校验、保存并返回新增入口。
+#[tauri::command]
+pub async fn add_shortcut(
+    state: State<'_, AppState>,
+    config: ShortcutConfig,
+) -> Result<ShortcutConfig, String> {
+    state.manager.lock().await.add_shortcut(config)
+}
+
+/// 输入 ID 和入口；持久化更新并返回结果。
+#[tauri::command]
+pub async fn update_shortcut(
+    state: State<'_, AppState>,
+    id: String,
+    config: ShortcutConfig,
+) -> Result<ShortcutConfig, String> {
+    state.manager.lock().await.update_shortcut(&id, config)
+}
+
+/// 输入入口 ID；仅删除入口配置，不操作进程或页面文件。
+#[tauri::command]
+pub async fn remove_shortcut(state: State<'_, AppState>, id: String) -> Result<(), String> {
+    state.manager.lock().await.remove_shortcut(&id)
+}
 
 #[tauri::command]
 pub async fn get_services(state: State<'_, AppState>) -> Result<Vec<ServiceRuntime>, String> {

@@ -99,12 +99,59 @@ local-service-manager/
 | 快捷访问 | 配置了 URL 的服务支持一键在浏览器中打开 |
 | 异常恢复 | 进程异常退出自动检测并推送通知 |
 
+### 常用服务 / 页面入口
+
+侧栏「常用入口」独立管理无需本地启动的服务和页面。支持添加、编辑、删除、按分组筛选，以及搜索名称、地址和说明；点击名称或「访问」即可打开。
+
+- 互联网：`https://github.com`。
+- 本机 / 局域网服务：`http://localhost:3000`、`http://192.168.1.10:8080`，不依赖本应用的服务运行状态。
+- 本地 HTML 页面：`file:///Users/yourname/Sites/index.html`（Windows 示例：`file:///C:/Sites/index.html`）。仅支持 `.html` / `.htm` 页面，在桌面应用中交给系统默认应用打开；浏览器预览受文件访问限制，会提示使用桌面应用。
+- 数据保存在原有 `config.yaml` 的 `shortcuts` 字段，旧配置无需迁移。可在「配置」页编辑或随配置备份；删除入口只删除书签。
+
+```yaml
+shortcuts:
+  - id: github
+    name: GitHub
+    url: https://github.com
+    group: 开发工具
+    description: 代码托管
+  - id: local-dashboard
+    name: 本地仪表盘
+    url: http://localhost:3000
+    group: 本地服务
+```
+
+本机 HTTP 桥与 Tauri 共用以下入口契约：`ShortcutConfig = { id, name, url, group?, description? }`。`id` 和 `name` 必须非空，地址必须是完整的 HTTP(S) 地址或本地 HTML 文件 URL，ID 在入口内唯一。
+
+- `GET /api/shortcuts`（`get_shortcuts`）：返回入口数组。
+- `POST /api/shortcuts`（`add_shortcut`）：请求体为入口对象，成功返回创建的入口。
+- `PUT /api/shortcuts/{id}`（`update_shortcut`）：请求体为入口对象，路径 ID 必须与对象 ID 相同，成功返回更新后的入口。
+- `DELETE /api/shortcuts/{id}`（`remove_shortcut`）：成功返回 204。
+- 非法字段值、重复 ID、ID 不匹配返回 400；缺少必填字段或 JSON 字段类型错误返回 422；更新或删除不存在的入口返回 404；文件写入失败返回 500。Tauri 返回相同的错误说明。只有持久化成功才更新内存并发出 `shortcuts-changed` 事件。
+
 ### 系统托盘
 
 - **动态菜单**：显示当前系统资源摘要和所有服务状态
 - **服务切换**：右键菜单直接启动/停止单个服务
 - **批量控制**：一键启动/停止全部服务
 - **通知推送**：服务异常退出时发送系统通知
+
+### macOS 桌面小组件
+
+应用可嵌入原生 WidgetKit 大号小组件，显示 CPU、内存、GPU、网络地址和服务状态，支持服务启停及运行中服务的快捷访问。新增的常用入口显示在独立区域，可直接访问互联网、本机/局域网地址及本地 HTML 页面，无需启动服务；空间不足时会显示剩余数量。
+
+入口增删改会在下一次监控循环同步到小组件快照并请求刷新，实际显示更新时间由 macOS 调度。点击入口后，后台主应用会从当前配置读取地址并打开；已删除的入口不会再被执行。
+
+安装含扩展的应用并启动一次后，在桌面空白处右键 →「编辑小组件」→ 搜索 **ServicePilot** → 添加大号小组件。使用时保持主应用或托盘运行；主应用约每 30 秒同步快照，实际显示刷新由 macOS 调度。
+
+从源码构建小组件需安装并完成 Xcode 首次初始化及许可确认，同时安装 [XcodeGen](https://github.com/yonaskolb/XcodeGen)：
+
+```bash
+brew install xcodegen
+pnpm build:macos
+```
+
+现有构建流程会生成 WidgetKit 工程、编译扩展，再将 `.appex` 嵌入主应用的 `Contents/PlugIns` 并依次签名扩展与主应用。主应用签名需保留项目的 JIT entitlements，以保证 WKWebView 正常显示。macOS 小组件使用方式参见 [Apple 文档](https://developer.apple.com/documentation/WidgetKit/Creating-a-Widget-Extension)。
 
 ### 资源监控
 
@@ -213,6 +260,8 @@ services:
 ```
 
 ### 字段说明
+
+服务存活检测会自动从本机 HTTP(S) 访问地址 `url` 提取端口（包括 localhost、回环地址和本机网卡 IP），无需另填 `port`。启动脚本后台启动服务后正常退出时，管理器会按监听端口跟踪实际服务进程。没有访问地址的旧配置仍可使用 `port`；远端地址不用于本机进程识别。
 
 | 字段 | 类型 | 必填 | 默认值 | 说明 |
 |------|------|------|--------|------|

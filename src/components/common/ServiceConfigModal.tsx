@@ -140,7 +140,7 @@ export default function ServiceConfigModal({
         <Form.Item
           name="url"
           label="访问地址"
-          tooltip="服务运行后可访问的 URL"
+          tooltip="服务运行后可访问的 URL；本机 HTTP(S) 地址的端口会自动用于存活检测"
         >
           <Input placeholder="如：http://localhost:3000" />
         </Form.Item>

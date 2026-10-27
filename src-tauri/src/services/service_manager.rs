@@ -1,6 +1,6 @@
 use crate::models::{
     AppConfig, BatchResult, ResourceHistoryPoint, ServiceConfig, ServiceRuntime, ServiceStatus,
-    StatusChangeEvent, SystemResource,
+    StatusChangeEvent, SystemResource, ShortcutConfig,
 };
 use crate::services::config_manager::{load_config, save_config};
 use crate::services::log_manager::LogManager;
@@ -52,7 +52,7 @@ impl ServiceManager {
         // 注意：这里只做"启动期"探测，运行期不把 Stopped 复活成 Running，
         // 否则会和"用户主动停止服务"的端口 TIME_WAIT 窗口冲突（停止后被误判复活）。
         for svc in &config.services {
-            if let Some(port) = svc.port {
+            if let Some(port) = svc.monitoring_port() {
                 if Self::port_is_listening(port) {
                     if let Some(runtime) = services.get_mut(&svc.id) {
                         runtime.status = ServiceStatus::Running;
@@ -84,6 +84,64 @@ impl ServiceManager {
     /// 获取单个服务
     pub fn get_service(&self, id: &str) -> Option<&ServiceRuntime> {
         self.services.get(id)
+    }
+
+    /// 无输入；返回按配置顺序排列的入口副本，不查询或启动服务。
+    pub fn get_shortcuts(&self) -> Vec<ShortcutConfig> {
+        self.config.shortcuts.clone()
+    }
+
+    /// 输入完整入口；校验唯一 ID，持久化成功后返回新增入口。
+    pub fn add_shortcut(&mut self, config: ShortcutConfig) -> Result<ShortcutConfig, String> {
+        config.validate()?;
+        if self.config.shortcuts.iter().any(|s| s.id == config.id) {
+            return Err(format!("入口 ID '{}' 已存在，请更换", config.id));
+        }
+        let mut next = self.config.clone();
+        next.shortcuts.push(config.clone());
+        self.save_shortcuts(next)?;
+        Ok(config)
+    }
+
+    /// 输入原 ID 和入口；禁止改 ID，持久化成功后返回更新结果。
+    pub fn update_shortcut(
+        &mut self,
+        id: &str,
+        config: ShortcutConfig,
+    ) -> Result<ShortcutConfig, String> {
+        config.validate()?;
+        if config.id != id {
+            return Err("入口 ID 不可修改".to_string());
+        }
+        let mut next = self.config.clone();
+        let entry = next
+            .shortcuts
+            .iter_mut()
+            .find(|s| s.id == id)
+            .ok_or_else(|| format!("入口 '{}' 不存在", id))?;
+        *entry = config.clone();
+        self.save_shortcuts(next)?;
+        Ok(config)
+    }
+
+    /// 输入入口 ID；只移除快捷入口，保存失败时保留原内存状态。
+    pub fn remove_shortcut(&mut self, id: &str) -> Result<(), String> {
+        let mut next = self.config.clone();
+        let index = next
+            .shortcuts
+            .iter()
+            .position(|s| s.id == id)
+            .ok_or_else(|| format!("入口 '{}' 不存在", id))?;
+        next.shortcuts.remove(index);
+        self.save_shortcuts(next)
+    }
+
+    /// 输入更新后的配置；先写磁盘再替换内存，并通知其他桌面窗口刷新入口。
+    fn save_shortcuts(&mut self, next: AppConfig) -> Result<(), String> {
+        save_config(&next)?;
+        self.config = next;
+        let _ = self.app_handle.emit("shortcuts-changed", ());
+        Ok(())
     }
 
     /// 获取缓存的系统资源快照（由监控循环每 tick 写入）。
@@ -137,7 +195,7 @@ impl ServiceManager {
                     restart_count: 0,
                     last_error: None,
                 };
-                if let Some(port) = svc.port {
+                if let Some(port) = svc.monitoring_port() {
                     if Self::port_is_listening(port) {
                         runtime.status = ServiceStatus::Running;
                         runtime.pid = Self::pid_listening_on_port(port);
@@ -512,7 +570,7 @@ impl ServiceManager {
         let mut errored: Vec<(String, String)> = Vec::new();
 
         for (id, service) in self.services.iter() {
-            let port = service.config.port;
+            let port = service.config.monitoring_port();
 
             // 1) 端口监听：判定服务真实可达
             let port_alive = port

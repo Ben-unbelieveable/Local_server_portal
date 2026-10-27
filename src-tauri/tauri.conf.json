@@ -33,7 +33,7 @@
   },
   "plugins": {
     "shell": {
-      "open": true
+      "open": "(?i)^((mailto:\\w+|tel:\\w+|https?://).+|file:///[^?#]+\\.html?([?#].*)?)$"
     }
   },
   "bundle": {
